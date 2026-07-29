@@ -1,0 +1,3256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sweck/ban — Local Kanban</title>
+<style>
+  :root {
+    --ink: #F5F5F7;
+    --dim: #98989D;
+    --bg: #1E1E1E;
+    --sidebar: #262626;
+    --surface: #2C2C2E;
+    --surface-hover: #333335;
+    --hairline: #3A3A3C;
+    --accent: #0A84FF;
+    --accent-ink: #FFFFFF;
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 13px;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+    --overlay: rgba(0, 0, 0, 0.45);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-pop: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --focus-ring: 0 0 0 4px rgba(10, 132, 255, 0.35);
+  }
+  body.light {
+    --ink: #1D1D1F;
+    --dim: #6E6E73;
+    --bg: #F5F5F5;
+    --sidebar: #EBEBEB;
+    --surface: #FFFFFF;
+    --surface-hover: #F0F0F1;
+    --hairline: #D9D9DC;
+    --accent: #007AFF;
+    --overlay: rgba(0, 0, 0, 0.28);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08);
+    --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.18);
+    --focus-ring: 0 0 0 4px rgba(0, 122, 255, 0.25);
+  }
+  body.light input[type="date"] { color-scheme: light; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .frame {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--hairline);
+    flex-wrap: wrap;
+    background: var(--sidebar);
+    -webkit-app-region: drag;
+  }
+  header button, header .credit, header .search-box { -webkit-app-region: no-drag; }
+  .search-box { position: relative; display: flex; align-items: center; }
+  .search-box .search-icon { position: absolute; left: 9px; color: var(--dim); pointer-events: none; }
+  #searchInput {
+    width: 190px; padding: 5px 10px 5px 29px;
+    font-family: var(--sans); font-size: 12.5px;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    outline: none; transition: box-shadow .12s, border-color .12s, width .15s;
+  }
+  #searchInput:focus { border-color: var(--accent); box-shadow: var(--focus-ring); width: 230px; }
+  #searchInput::-webkit-search-cancel-button { -webkit-appearance: none; height: 0; width: 0; }
+  .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+  }
+  .tagline {
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .credit {
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  /* ---------- Two-pane layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    flex: 1;
+    min-height: 0;
+  }
+  /* Whole-sidebar collapse: board takes the full width */
+  .layout.sidebar-collapsed { grid-template-columns: 1fr; }
+  .layout.sidebar-collapsed aside { display: none; }
+  aside {
+    background: var(--sidebar);
+    border-right: 1px solid var(--hairline);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    overflow-y: auto;
+  }
+  .pane-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+    padding: 0 6px;
+  }
+  .pane-toggle {
+    display: flex; align-items: center; gap: 5px;
+    width: 100%; background: none; border: none; cursor: pointer;
+    text-align: left; box-shadow: none;
+    color: var(--dim);
+  }
+  .pane-toggle:hover { color: var(--ink); }
+  .pane-toggle .disclosure {
+    color: var(--dim);
+    transform: rotate(90deg);
+    transition: transform .15s ease;
+    flex: none;
+  }
+  .pane-group.collapsed .pane-toggle .disclosure { transform: rotate(0deg); }
+  .pane-group.collapsed .pane-body { display: none; }
+
+  /* Segmented control (board type picker) */
+  .seg { display: flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm); }
+  .seg-btn {
+    flex: 1; padding: 5px 8px; border: none; background: none; cursor: pointer;
+    font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--dim);
+    border-radius: 4px; transition: background-color .1s, color .1s;
+  }
+  .seg-btn:hover { color: var(--ink); }
+  .seg-btn.on { background: var(--accent); color: #fff; }
+
+  .board-list { display: flex; flex-direction: column; gap: 1px; }
+  .board-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color .1s;
+  }
+  .board-item:hover { background: var(--surface-hover); }
+  .board-item.active { background: var(--accent); color: var(--accent-ink); }
+  .board-item.active .count { color: rgba(255,255,255,0.75); }
+  .board-item.active .del { color: rgba(255,255,255,0.75); }
+  .board-item .count { font-size: 11px; color: var(--dim); }
+  .board-item .del {
+    background: none; border: none; color: var(--dim);
+    font-size: 15px; cursor: pointer;
+    padding: 0 2px; line-height: 1;
+  }
+  .board-item .del:hover { color: var(--ink); }
+  .board-item.active .del:hover { color: #fff; }
+
+  input[type="text"], textarea, input[type="date"] {
+    width: 100%;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    font-family: var(--sans);
+    font-size: 13px;
+    outline: none;
+    transition: box-shadow .12s, border-color .12s;
+  }
+  input[type="text"]:focus, textarea:focus, input[type="date"]:focus {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+  }
+  input[type="date"] { font-size: 13px; }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+
+  .btn {
+    display: inline-block;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--shadow-card);
+    transition: background-color .1s, border-color .1s;
+  }
+  .btn:hover { background: var(--surface-hover); }
+  .btn:focus-visible { box-shadow: var(--focus-ring); }
+  .btn:not(.subtle) { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:not(.subtle):hover { filter: brightness(1.08); }
+  .btn.subtle { color: var(--ink); }
+  .btn.subtle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+
+  .storage-note {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.6;
+    border-top: 1px solid var(--hairline);
+    padding-top: 12px;
+    margin-top: auto;
+  }
+  .storage-note b { color: var(--ink); font-weight: 600; }
+
+  /* People / mentions */
+  .people-list { display: flex; flex-direction: column; gap: 1px; }
+  .person-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 12.5px; transition: background-color .1s;
+  }
+  .person-row:hover { background: var(--surface-hover); }
+  .person-row.filtering { background: var(--accent); color: var(--accent-ink); }
+  .person-row .handle { font-size: 11px; color: var(--dim); }
+  .person-row.filtering .handle { color: rgba(255,255,255,0.75); }
+  .person-row .pcount { font-size: 11px; color: var(--dim); }
+  .person-row.filtering .pcount { color: rgba(255,255,255,0.75); }
+  .person-row .del {
+    background: none; border: none; color: var(--dim);
+    font-size: 15px; cursor: pointer; padding: 0 2px; line-height: 1;
+  }
+  .person-row .del:hover { color: var(--ink); }
+  .person-row.filtering .del:hover { color: #fff; }
+  .people-hint { font-size: 10.5px; color: var(--dim); margin-top: 8px; line-height: 1.6; padding: 0 6px; }
+  .pdot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: none; padding: 0; cursor: pointer; flex: none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+  }
+  .tag-color-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cp-swatch {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid transparent; cursor: pointer; opacity: .85; padding: 0;
+  }
+  .cp-swatch:hover { opacity: 1; }
+  .cp-swatch.on { border-color: var(--ink); opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
+  .color-pop {
+    position: fixed; z-index: 25; display: none;
+    flex-direction: column; gap: 8px; width: 230px;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: var(--radius); padding: 10px;
+    box-shadow: var(--shadow-pop);
+    backdrop-filter: blur(20px);
+  }
+  .cp-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+  .color-pop input { font-size: 12px; padding: 6px 8px; }
+
+  .mention { color: var(--accent); font-weight: 500; }
+  .mention-badge {
+    font-size: 10.5px; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: var(--radius-sm); padding: 2px 6px;
+  }
+
+  .ac {
+    position: fixed; z-index: 20; display: none;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius);
+    max-height: 220px; overflow-y: auto;
+    box-shadow: var(--shadow-pop);
+    backdrop-filter: blur(20px);
+  }
+  .ac-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 12px; cursor: pointer; }
+  .ac-row.on { background: var(--accent); }
+  .ac-handle { font-size: 12px; color: var(--accent); }
+  .ac-name { font-size: 12.5px; color: var(--dim); }
+  .ac-row.on .ac-handle, .ac-row.on .ac-name { color: #fff; }
+
+  .boardwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); position: relative; }
+  /* Optional user background image; opacity controlled by JS. Sits behind board content. */
+  .bg-layer {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+  }
+  .boardwrap > .filter-banner, .boardwrap > main { position: relative; z-index: 1; }
+  /* Edge fades signalling horizontal scroll room; toggled by JS */
+  .boardwrap::before, .boardwrap::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 32px;
+    pointer-events: none; z-index: 5; opacity: 0; transition: opacity .15s;
+  }
+  .boardwrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+  .boardwrap::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
+  .boardwrap.scroll-left::before { opacity: 1; }
+  .boardwrap.scroll-right::after { opacity: 1; }
+  .filter-banner {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 20px; border-bottom: 1px solid var(--hairline);
+    font-size: 12px; color: var(--dim);
+  }
+  .filter-banner .fh { color: var(--accent); font-weight: 500; }
+  .filter-banner .btn { padding: 4px 10px; font-size: 11px; box-shadow: none; }
+
+  .file-status {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.6;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    overflow-wrap: anywhere;
+    background: var(--surface);
+  }
+  .board-item .board-name {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .board-type-icon { display: inline-flex; align-items: center; color: var(--dim); flex: none; margin-right: 2px; }
+  .board-item.active .board-type-icon { color: rgba(255,255,255,0.8); }
+  .person-row .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-status.connected { color: var(--ink); }
+  .file-status.connected::before { content: "● "; color: #34C759; }
+
+  /* ---------- Board pane ---------- */
+  main {
+    flex: 1;
+    min-height: 0;
+    padding: 18px 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .empty-board {
+    color: var(--dim);
+    font-size: 13px;
+    padding: 8px 2px;
+    line-height: 1.7;
+  }
+
+  /* ---------- Planner (Gantt) ---------- */
+  #board.planner-mode { display: block; overflow: hidden; padding: 0; }
+  .planner { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .planner-empty { color: var(--dim); font-size: 13px; padding: 20px; }
+  .planner-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--hairline);
+  }
+  .planner-toolbar-left { display: flex; align-items: center; gap: 8px; }
+  .planner-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dept-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 4px 3px 4px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 12px;
+  }
+  .dept-swatch {
+    width: 14px; height: 14px; border-radius: 50%; border: none; padding: 0; cursor: pointer;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.15); flex: none;
+  }
+  .dept-name { color: var(--ink); }
+  .dept-del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+  .dept-del:hover { color: var(--ink); }
+  .dept-add { display: inline-flex; align-items: center; gap: 4px; }
+  .dept-add input { width: 130px; padding: 4px 8px; font-size: 12px; }
+  .planner-grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
+
+  /* Timeline */
+  .pl-inner { position: relative; }
+  .pl-header { display: flex; position: sticky; top: 0; z-index: 3; background: var(--bg); }
+  .pl-corner {
+    position: sticky; left: 0; z-index: 4; flex: none;
+    background: var(--sidebar); border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+    font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.3px;
+    display: flex; align-items: flex-end; padding: 6px 12px; height: 44px;
+  }
+  .pl-scale { position: relative; flex: none; height: 44px; border-bottom: 1px solid var(--hairline); }
+  .pl-year {
+    position: absolute; top: 0; height: 22px; display: flex; align-items: center; padding-left: 6px;
+    font-size: 12px; font-weight: 600; color: var(--ink); border-left: 1px solid var(--hairline);
+    box-sizing: border-box; overflow: hidden;
+  }
+  .pl-sub {
+    position: absolute; top: 24px; height: 20px; display: flex; align-items: center; padding-left: 4px;
+    font-size: 10px; color: var(--dim); white-space: nowrap;
+  }
+  .pl-body { position: relative; }
+  .pl-gridlines { position: absolute; top: 0; bottom: 0; z-index: 0; pointer-events: none; }
+  .pl-gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--hairline); opacity: 0.35; }
+  .pl-gl-year { opacity: 0.7; }
+  .pl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: 0.8; }
+  .pl-row { display: flex; position: relative; z-index: 1; border-bottom: 1px solid var(--hairline); }
+  .pl-name {
+    position: sticky; left: 0; z-index: 2; flex: none;
+    background: var(--sidebar); border-right: 1px solid var(--hairline);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 46px; cursor: pointer;
+  }
+  .pl-name:hover { background: var(--surface-hover); }
+  .pl-name-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
+  .pl-name-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-track { position: relative; flex: none; height: 46px; }
+  .pl-bar {
+    position: absolute; top: 22px; height: 22px; border-radius: 5px; cursor: grab;
+    display: flex; align-items: center; overflow: hidden; box-shadow: var(--shadow-card); min-width: 4px;
+    user-select: none;
+  }
+  .pl-bar:hover { filter: brightness(1.08); }
+  .pl-bar-label { font-size: 11px; color: #fff; padding: 0 9px; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,0.35); pointer-events: none; }
+  .pl-bar-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 2; }
+  .pl-bar-handle.l { left: 0; }
+  .pl-bar-handle.r { right: 0; }
+  body.pl-dragging, body.pl-dragging .pl-bar { cursor: grabbing !important; user-select: none; }
+  .pl-lane .pl-name { background: var(--surface); }
+  .pl-lane-name { text-transform: none; }
+  .pl-lane-text { font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-lane-track { background: rgba(128,128,128,0.05); }
+  .pl-point {
+    position: absolute; top: 27px; width: 12px; height: 12px; border-radius: 50%;
+    transform: translateX(-6px); cursor: pointer; box-shadow: 0 0 0 2px var(--bg);
+  }
+  /* Milestones sit in a lane above the bars so they never cover bar text */
+  .pl-ms {
+    position: absolute; top: 0; height: 20px; transform: translateX(-6px);
+    display: flex; align-items: center; gap: 4px; cursor: pointer; z-index: 3; white-space: nowrap;
+  }
+  .pl-ms-diamond {
+    width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px;
+    box-shadow: 0 0 0 1.5px var(--bg); flex: none;
+  }
+  .pl-ms-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; color: var(--ink); }
+  .planner-grid .planner-empty { position: absolute; top: 56px; left: 232px; }
+
+  .list {
+    flex: 1 1 260px;
+    min-width: 260px;
+    max-width: 340px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+  /* Fixed-width mode: columns stay 270px and scroll horizontally */
+  main.fixed-width .list { flex: 0 0 270px; max-width: none; }
+  .list.drag-over-list { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Collapsed column: a thin vertical strip */
+  .list.collapsed {
+    flex: 0 0 44px;
+    min-width: 44px;
+    max-width: 44px;
+    align-items: center;
+    align-self: stretch;
+  }
+  .list.collapsed .cards,
+  .list.collapsed .list-footer { display: none; }
+  .list.collapsed .list-header {
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    border-bottom: none;
+    padding: 10px 4px;
+    cursor: pointer;
+  }
+  .list.collapsed .list-title {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .list.collapsed .list-right { flex-direction: column; }
+  .list.collapsed .list-del { display: none; }
+
+  .list-collapse {
+    background: none; border: none; color: var(--dim);
+    cursor: pointer; padding: 0; line-height: 1; flex: none;
+    display: inline-flex; align-items: center;
+  }
+  .list-collapse:hover { color: var(--ink); }
+  .list-collapse .chev { transition: transform .15s ease; }
+  .list.collapsed .list-collapse .chev { transform: rotate(180deg); }
+
+  .list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--hairline);
+    cursor: grab;
+  }
+  .list-title {
+    font-size: 12.5px;
+    letter-spacing: 0.1px;
+    font-weight: 600;
+    cursor: text;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .list-title input {
+    border: none; border-bottom: 1px solid var(--accent);
+    border-radius: 0; padding: 0 0 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .list-count { font-size: 11px; color: var(--dim); }
+  .list-del {
+    background: none; border: none; color: var(--dim);
+    font-size: 15px; cursor: pointer; line-height: 1;
+  }
+  .list-del:hover { color: var(--ink); }
+
+  .cards {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    min-height: 24px;
+    flex: 1;
+  }
+  .card {
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    padding: 9px 11px;
+    cursor: grab;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow .12s, transform .12s;
+  }
+  .card:hover { box-shadow: 0 0 0 1px var(--accent); }
+  .card.dragging { opacity: 0.35; }
+  .card-title { font-size: 13px; line-height: 1.4; word-wrap: break-word; }
+  .card-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .card-meta:empty { display: none; }
+  .chip { width: 26px; height: 5px; border-radius: 3px; }
+  .due {
+    font-size: 10.5px;
+    letter-spacing: 0.1px;
+    color: var(--dim);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+  }
+  .due.overdue { color: #fff; background: #FF453A; border-color: #FF453A; }
+  .has-desc { font-size: 11px; color: var(--dim); }
+  .drop-indicator { height: 2px; background: var(--accent); border-radius: 2px; }
+
+  .list-footer { padding: 8px; border-top: 1px solid var(--hairline); }
+  .add-card-input { font-size: 12.5px; padding: 6px 9px; }
+
+  .add-list {
+    flex: none;
+    min-width: 270px;
+    width: 270px;
+  }
+
+  /* ---------- Modal ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: var(--overlay);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 60px 20px;
+    z-index: 10;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    width: 540px;
+    max-width: 100%;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: var(--shadow-pop);
+  }
+  .modal .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 7px;
+  }
+  .label-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .label-swatch {
+    width: 44px; height: 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity .12s;
+  }
+  .label-swatch:hover { opacity: 0.8; }
+  .label-swatch.on { opacity: 1; box-shadow: 0 0 0 2px var(--ink); }
+  .two-col { display: flex; gap: 12px; }
+  .two-col > .field { flex: 1; }
+  .label-hint { font-weight: 400; text-transform: none; letter-spacing: normal; color: var(--dim); }
+  .modal select {
+    width: 100%; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    padding: 7px 10px; font-family: var(--sans); font-size: 13px; outline: none;
+  }
+  .modal select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .ms-list { display: flex; flex-direction: column; gap: 6px; }
+  .ms-row { display: flex; gap: 8px; align-items: center; }
+  .ms-row input[type="text"] { flex: 1; }
+  .ms-row input[type="date"] { flex: none; width: 150px; }
+  .ms-empty { font-size: 12px; color: var(--dim); }
+  .assignee-list {
+    max-height: 168px; overflow-y: auto;
+    border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 4px;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .assignee-group { font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dim); padding: 6px 6px 2px; }
+  .assignee-row {
+    display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; cursor: pointer;
+    text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0; color: var(--ink);
+  }
+  .assignee-row:hover { background: var(--surface-hover); }
+  .assignee-row input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: none; }
+  .assignee-name { font-size: 13px; color: var(--ink); text-transform: none; letter-spacing: normal; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modal-footer { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+  .modal-context { font-size: 11.5px; color: var(--dim); }
+  .modal-context b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Settings sheet ---------- */
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0;
+    color: var(--ink);
+  }
+  .icon-btn svg { display: block; }
+  .settings-modal { width: 460px; gap: 18px; }
+  .settings-title { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+  .settings-modal .storage-note { border-top: none; padding-top: 0; margin-top: 0; }
+  .settings-modal .file-status { margin-bottom: 8px; }
+
+  /* Archive button + drawer */
+  #archiveBtn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; }
+  #archiveBtn #archiveCount { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .archive-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+  .archive-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    background: var(--bg);
+  }
+  .archive-info { min-width: 0; }
+  .archive-card-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .archive-card-list { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .archive-actions { display: flex; gap: 6px; flex: none; }
+  .archive-actions .btn { padding: 4px 10px; font-size: 11.5px; box-shadow: none; }
+  .archive-empty { font-size: 12.5px; color: var(--dim); padding: 8px 2px; }
+  .toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--ink); cursor: pointer;
+    text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0;
+  }
+  .toggle-row input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
+  /* Customize rows (colors + background image) */
+  .custom-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .custom-row:first-of-type { margin-top: 0; }
+  .custom-label { font-size: 13px; color: var(--ink); flex: 1; min-width: 0; }
+  .color-swatch-input {
+    -webkit-appearance: none; appearance: none;
+    width: 34px; height: 24px; padding: 0; flex: none;
+    border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    background: none; cursor: pointer;
+  }
+  .color-swatch-input::-webkit-color-swatch-wrapper { padding: 2px; }
+  .color-swatch-input::-webkit-color-swatch { border: none; border-radius: 3px; }
+  .btn.mini { padding: 3px 9px; font-size: 11.5px; box-shadow: none; }
+  .opacity-slider { flex: none; width: 130px; accent-color: var(--accent); cursor: pointer; }
+  .opacity-val { font-size: 11.5px; color: var(--dim); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  .custom-row.disabled { opacity: 0.4; pointer-events: none; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); background-clip: padding-box; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    aside { border-right: none; border-bottom: 1px solid var(--hairline); max-height: 40vh; }
+    main { overflow-y: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <div class="header-left">
+      <button class="btn subtle icon-btn" id="sidebarToggle" title="Toggle Sidebar (⌥⌘S)" aria-label="Toggle Sidebar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line>
+        </svg>
+      </button>
+      <div class="brand">
+        <h1>Sweckban</h1>
+        <span class="tagline">Cards in — clutter out. A local kanban board.</span>
+      </div>
+    </div>
+    <span style="display:flex;gap:12px;align-items:center">
+      <div class="search-box">
+        <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" id="searchInput" placeholder="Search cards…" aria-label="Search cards" autocomplete="off">
+      </div>
+      <button class="btn subtle" id="archiveBtn" title="Archived cards" aria-label="Archived cards" hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="4" rx="1"></rect><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"></path><line x1="10" y1="12" x2="14" y2="12"></line>
+        </svg>
+        <span id="archiveCount">0</span>
+      </button>
+      <button class="btn subtle icon-btn" id="settingsBtn" title="Settings (⌘,)" aria-label="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </span>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="pane-group" id="boardsGroup">
+        <button class="pane-label pane-toggle" id="boardsToggle" aria-expanded="true" aria-controls="boardsBody">
+          <svg class="disclosure" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Boards</span>
+        </button>
+        <div class="pane-body" id="boardsBody">
+          <div class="board-list" id="boardList"></div>
+          <div class="stack" style="margin-top:10px">
+            <input type="text" id="newBoardName" placeholder="New board name" maxlength="60">
+            <div class="seg" id="boardTypeSeg" role="radiogroup" aria-label="Board type">
+              <button class="seg-btn on" data-type="kanban" role="radio" aria-checked="true">Kanban</button>
+              <button class="seg-btn" data-type="planner" role="radio" aria-checked="false">Planner</button>
+            </div>
+            <button class="btn" id="addBoardBtn">+ Add Board</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane-group" id="peopleGroup">
+        <button class="pane-label pane-toggle" id="peopleToggle" aria-expanded="true" aria-controls="peopleBody">
+          <svg class="disclosure" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>People</span>
+        </button>
+        <div class="pane-body" id="peopleBody">
+          <div class="people-list" id="peopleList"></div>
+          <div class="stack" style="margin-top:10px">
+            <input type="text" id="newPersonName" placeholder="Full name (Dalton Kiner)" maxlength="60">
+            <input type="text" id="newPersonHandle" placeholder="@handle (auto)" maxlength="30">
+            <div class="tag-color-row" id="newPersonColors"></div>
+            <input type="text" id="newPersonHex" placeholder="#RRGGBB (optional)" maxlength="7">
+            <button class="btn subtle" id="addPersonBtn">+ Add Person</button>
+          </div>
+          <div class="people-hint">Type @ in a card to tag. Click a person to filter the board.</div>
+        </div>
+      </div>
+
+      <div class="pane-group" id="departmentsGroup">
+        <button class="pane-label pane-toggle" id="departmentsToggle" aria-expanded="true" aria-controls="departmentsBody">
+          <svg class="disclosure" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Departments</span>
+        </button>
+        <div class="pane-body" id="departmentsBody">
+          <div class="people-list" id="departmentsList"></div>
+          <div class="stack" style="margin-top:10px">
+            <input type="text" id="newDeptName" placeholder="Department name (GRC)" maxlength="40">
+            <input type="text" id="newDeptHandle" placeholder="@handle (auto)" maxlength="30">
+            <div class="tag-color-row" id="newDeptColors"></div>
+            <input type="text" id="newDeptHex" placeholder="#RRGGBB (optional)" maxlength="7">
+            <button class="btn subtle" id="addDeptSidebarBtn">+ Add Department</button>
+          </div>
+          <div class="people-hint">@-tag departments in cards, assign them to tasks, click one to filter.</div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="boardwrap">
+      <div class="bg-layer" id="bgLayer"></div>
+      <div class="filter-banner" id="filterBanner" hidden></div>
+      <main id="board"></main>
+    </section>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<!-- Archive drawer -->
+<div class="overlay" id="archiveOverlay">
+  <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label="Archived cards">
+    <div class="settings-title">Archived Cards</div>
+    <div class="archive-list" id="archiveList"></div>
+    <div class="modal-footer" style="justify-content:flex-end">
+      <button class="btn" id="archiveDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="settingsOverlay">
+  <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="settings-title">Settings</div>
+
+    <div class="field">
+      <label>Appearance</label>
+      <button class="btn subtle" id="themeBtn">Light Mode</button>
+    </div>
+
+    <div class="field">
+      <label>Board</label>
+      <label class="toggle-row">
+        <input type="checkbox" id="fitWidthToggle" checked>
+        <span>Fit columns to window width</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label>Customize</label>
+      <div class="custom-row">
+        <span class="custom-label">Background</span>
+        <input type="color" id="bgColorInput" class="color-swatch-input" aria-label="Background color">
+        <button class="btn subtle mini" id="bgColorReset">Reset</button>
+      </div>
+      <div class="custom-row">
+        <span class="custom-label">Menu / Sidebar</span>
+        <input type="color" id="sidebarColorInput" class="color-swatch-input" aria-label="Menu color">
+        <button class="btn subtle mini" id="sidebarColorReset">Reset</button>
+      </div>
+      <div class="custom-row">
+        <span class="custom-label">Accent</span>
+        <input type="color" id="accentColorInput" class="color-swatch-input" aria-label="Accent color">
+        <button class="btn subtle mini" id="accentColorReset">Reset</button>
+      </div>
+      <div class="custom-row">
+        <span class="custom-label">Background image</span>
+        <button class="btn subtle mini" id="bgImageChoose">Choose…</button>
+        <button class="btn subtle mini" id="bgImageRemove" hidden>Remove</button>
+        <input type="file" id="bgImageFile" accept="image/*" style="display:none">
+      </div>
+      <div class="custom-row" id="bgOpacityRow">
+        <span class="custom-label">Image opacity</span>
+        <input type="range" min="0" max="100" value="100" id="bgOpacityInput" class="opacity-slider" aria-label="Background image opacity">
+        <span class="opacity-val" id="bgOpacityVal">100%</span>
+      </div>
+    </div>
+
+    <div class="field" id="saveFileSection">
+      <label>Save File</label>
+      <div class="file-status" id="fileStatus">Not connected — using browser storage</div>
+      <div class="btn-row" id="fileButtons">
+        <button class="btn" id="openFileBtn">Open File…</button>
+        <button class="btn subtle" id="createFileBtn">Create File…</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Data</label>
+      <div class="btn-row">
+        <button class="btn subtle" id="exportBtn">Export JSON</button>
+        <button class="btn subtle" id="importBtn">Import JSON</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+    </div>
+
+    <div class="storage-note" id="storageNote">
+      Link a <b>sweckban-data.json</b> in your iCloud-synced folder and every change writes straight to it — the file syncs between Macs. Browser storage is kept as a local fallback.
+    </div>
+
+    <div class="modal-footer" style="justify-content:flex-end">
+      <button class="btn" id="settingsDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Card modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit card">
+    <div class="modal-context" id="modalContext"></div>
+    <div class="field">
+      <label for="mTitle">Title</label>
+      <input type="text" id="mTitle" maxlength="200">
+    </div>
+    <div class="field">
+      <label for="mDesc">Description</label>
+      <textarea id="mDesc" placeholder="Notes, links, context…"></textarea>
+    </div>
+    <div class="field">
+      <label>Labels</label>
+      <div class="label-picker" id="mLabels"></div>
+    </div>
+    <div class="field">
+      <label for="mDue">Due date</label>
+      <input type="date" id="mDue">
+    </div>
+    <div class="modal-footer">
+      <button class="btn subtle" id="mDelete">Archive Card</button>
+      <div class="btn-row">
+        <button class="btn subtle" id="mCancel">Cancel</button>
+        <button class="btn" id="mSave">Save Card</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task modal (planner) -->
+<div class="overlay" id="taskOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit task">
+    <div class="settings-title" id="taskModalTitle">Task</div>
+    <div class="field">
+      <label for="tTitle">Title</label>
+      <input type="text" id="tTitle" maxlength="200">
+    </div>
+    <div class="field">
+      <label for="tDesc">Description</label>
+      <textarea id="tDesc" placeholder="Notes, context…"></textarea>
+    </div>
+    <div class="two-col">
+      <div class="field"><label for="tStart">Start</label><input type="date" id="tStart"></div>
+      <div class="field"><label for="tEnd">End</label><input type="date" id="tEnd"></div>
+    </div>
+    <div class="field">
+      <label>Assignees</label>
+      <div id="tAssignees" class="assignee-list"></div>
+    </div>
+    <div class="field">
+      <label>Bar color <span class="label-hint">(overrides assignee)</span></label>
+      <div class="custom-row">
+        <input type="color" id="tColor" class="color-swatch-input" aria-label="Task bar color">
+        <button class="btn subtle mini" id="tColorReset">Use assignee color</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Milestones</label>
+      <div id="tMilestones" class="ms-list"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn subtle mini" id="tAddDue">+ Due</button>
+        <button class="btn subtle mini" id="tAddEol">+ EOL</button>
+        <button class="btn subtle mini" id="tAddMs">+ Milestone</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn subtle" id="tDelete">Delete Task</button>
+      <div class="btn-row">
+        <button class="btn subtle" id="tCancel">Cancel</button>
+        <button class="btn" id="tSave">Save Task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const STORE_KEY = "sweckban.v1";
+  const LABEL_COLORS = ["#FF4D00", "#4DA3FF", "#3FBF6F", "#FFC24D", "#B36BFF", "#FF5C7A"];
+
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  // Native bridge: present when running inside the Sweckban.app WKWebView wrapper
+  const NATIVE = !!(window.__SWECKBAN_NATIVE && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sweckban);
+  const nativePost = (msg) => { try { window.webkit.messageHandlers.sweckban.postMessage(msg); } catch (e) {} };
+
+  // ---------- State ----------
+  let state = load();
+
+  function load() {
+    // In the native app, the wrapper injects the data file's contents at boot
+    if (NATIVE && window.__SWECKBAN_BOOT_DATA) {
+      try {
+        const parsed = JSON.parse(window.__SWECKBAN_BOOT_DATA);
+        if (parsed && Array.isArray(parsed.boards) && parsed.boards.length) return parsed;
+      } catch (e) { /* fall through */ }
+    }
+    try {
+      const raw = localStorage.getItem(STORE_KEY) || localStorage.getItem("swecko.v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.boards)) return parsed;
+      }
+    } catch (e) { /* fall through to seed */ }
+    return seed();
+  }
+
+  function seed() {
+    const boardId = uid();
+    return {
+      activeBoard: boardId,
+      boards: [{
+        id: boardId,
+        name: "First Board",
+        lists: [
+          { id: uid(), name: "To Do", cards: [
+            { id: uid(), title: "Drag me to another list", desc: "", labels: [LABEL_COLORS[0]], due: "" },
+            { id: uid(), title: "Click a card to edit it", desc: "Cards hold a description, labels, and a due date.", labels: [], due: "" }
+          ]},
+          { id: uid(), name: "Doing", cards: [] },
+          { id: uid(), name: "Done", cards: [] }
+        ]
+      }]
+    };
+  }
+
+  let storageOk = true;
+  // Raw write: localStorage + native/file. No undo bookkeeping (used by undo/redo too).
+  function persistState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      storageOk = true;
+    } catch (e) {
+      if (storageOk && !fileHandle && !NATIVE) {
+        storageOk = false;
+        alert("Sweckban couldn't write to localStorage in this browser context. Link a save file, or use Export JSON to keep your changes.");
+      }
+    }
+    if (NATIVE) nativePost({ cmd: "save", data: JSON.stringify(state, null, 2) });
+    else queueFileWrite();
+  }
+
+  // ---------- Undo / redo (snapshot-based; every mutation funnels through save()) ----------
+  const undoStack = [], redoStack = [];
+  const UNDO_CAP = 50;
+  let committed = JSON.stringify(state);
+  function save() {
+    const snap = JSON.stringify(state);
+    if (snap !== committed) {
+      undoStack.push(committed);
+      if (undoStack.length > UNDO_CAP) undoStack.shift();
+      redoStack.length = 0;
+      committed = snap;
+    }
+    persistState();
+  }
+  // After an external (iCloud/file) sync replaces state, make it the new undo baseline
+  // so a later undo can't clobber synced-in changes with stale local state.
+  function resetUndoBaseline() {
+    committed = JSON.stringify(state);
+    undoStack.length = 0; redoStack.length = 0;
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(committed);
+    committed = undoStack.pop();
+    state = JSON.parse(committed);
+    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
+    persistState(); renderAll();
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(committed);
+    committed = redoStack.pop();
+    state = JSON.parse(committed);
+    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
+    persistState(); renderAll();
+  }
+
+  // ---------- Save file (File System Access API) ----------
+  const FS_SUPPORTED = "showOpenFilePicker" in window;
+  let fileHandle = null;
+  let lastKnownMod = 0;
+  let writeTimer = null;
+  const fileStatus = document.getElementById("fileStatus");
+
+  function setStatus(text, connected) {
+    fileStatus.textContent = text;
+    fileStatus.classList.toggle("connected", !!connected);
+  }
+
+  function queueFileWrite() {
+    if (!fileHandle) return;
+    clearTimeout(writeTimer);
+    writeTimer = setTimeout(writeToFile, 300);
+  }
+
+  async function writeToFile() {
+    if (!fileHandle) return;
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(state, null, 2));
+      await writable.close();
+      const f = await fileHandle.getFile();
+      lastKnownMod = f.lastModified;
+      setStatus(`Connected: ${fileHandle.name} — saved ${new Date().toLocaleTimeString()}`, true);
+    } catch (e) {
+      setStatus(`Write failed: ${fileHandle.name} — check permissions`, false);
+    }
+  }
+
+  async function readFromFile() {
+    const f = await fileHandle.getFile();
+    lastKnownMod = f.lastModified;
+    const text = await f.text();
+    if (!text.trim()) return false; // empty/new file
+    const parsed = JSON.parse(text);
+    if (!parsed || !Array.isArray(parsed.boards)) throw new Error("Invalid data");
+    state = parsed;
+    if (!state.boards.length) state = seed();
+    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
+    return true;
+  }
+
+  async function connectHandle(handle, { loadFirst }) {
+    fileHandle = handle;
+    try {
+      let loaded = false;
+      if (loadFirst) loaded = await readFromFile();
+      if (!loaded) await writeToFile(); // new/empty file: seed it with current state
+      else { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+      await idbSet("handle", handle);
+      setStatus(`Connected: ${handle.name}`, true);
+      renderAll();
+    } catch (e) {
+      fileHandle = null;
+      setStatus("Couldn't read that file — is it a Sweckban JSON?", false);
+    }
+  }
+
+  async function verifyPermission(handle) {
+    const opts = { mode: "readwrite" };
+    if ((await handle.queryPermission(opts)) === "granted") return true;
+    return (await handle.requestPermission(opts)) === "granted";
+  }
+
+  // Minimal IndexedDB wrapper to persist the file handle across sessions
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const req = indexedDB.open("sweckban-fs", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  }
+  async function idbSet(key, val) {
+    try {
+      const db = await idbOpen();
+      return new Promise((res, rej) => {
+        const tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").put(val, key);
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  async function idbGet(key) {
+    try {
+      const db = await idbOpen();
+      return new Promise((res) => {
+        const tx = db.transaction("kv", "readonly");
+        const req = tx.objectStore("kv").get(key);
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => res(null);
+      });
+    } catch (e) { return null; }
+  }
+
+  async function initSaveFile() {
+    if (NATIVE) {
+      // Native wrapper owns persistence — swap the file-picker UI for a status line + Finder reveal
+      document.getElementById("fileButtons").innerHTML = "";
+      const reveal = document.createElement("button");
+      reveal.className = "btn subtle";
+      reveal.textContent = "Reveal in Finder";
+      reveal.addEventListener("click", () => nativePost({ cmd: "revealData" }));
+      const move = document.createElement("button");
+      move.className = "btn subtle";
+      move.textContent = "Change Location\u2026";
+      move.addEventListener("click", () => nativePost({ cmd: "changeLocation" }));
+      document.getElementById("fileButtons").append(reveal, move);
+      const p = window.__SWECKBAN_DATA_PATH || "sweckban-data.json";
+      setStatus(`Native app — saving to ${p}`, true);
+      document.getElementById("storageNote").innerHTML =
+        "Every change writes straight to the data file. Keep it in an iCloud-synced folder and it follows you between Macs.";
+      return;
+    }
+
+    if (!FS_SUPPORTED) {
+      document.getElementById("fileButtons").style.display = "none";
+      setStatus("Direct file saves need a Chromium browser (Chrome, Edge, Brave, Arc). Safari falls back to browser storage + Export JSON.", false);
+      return;
+    }
+
+    document.getElementById("openFileBtn").addEventListener("click", async () => {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: "Sweckban data", accept: { "application/json": [".json"] } }]
+        });
+        if (await verifyPermission(handle)) await connectHandle(handle, { loadFirst: true });
+      } catch (e) { /* user cancelled */ }
+    });
+
+    document.getElementById("createFileBtn").addEventListener("click", async () => {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: "sweckban-data.json",
+          types: [{ description: "Sweckban data", accept: { "application/json": [".json"] } }]
+        });
+        await connectHandle(handle, { loadFirst: false });
+      } catch (e) { /* user cancelled */ }
+    });
+
+    // Restore a previously linked file — browsers require one click to re-grant access
+    const saved = await idbGet("handle");
+    if (saved) {
+      setStatus(`Save file linked: ${saved.name}`, false);
+      const btn = document.createElement("button");
+      btn.className = "btn";
+      btn.textContent = `Reconnect ${saved.name}`;
+      btn.style.width = "100%";
+      btn.addEventListener("click", async () => {
+        if (await verifyPermission(saved)) {
+          await connectHandle(saved, { loadFirst: true });
+          btn.remove();
+        }
+      });
+      document.getElementById("saveFileSection").appendChild(btn);
+    }
+
+    // Pick up changes synced in from another Mac while this tab was in the background
+    window.addEventListener("focus", async () => {
+      if (!fileHandle) return;
+      try {
+        const f = await fileHandle.getFile();
+        if (f.lastModified > lastKnownMod) {
+          closeModal(); closeTaskModal(); closeArchive();  // don't leave an editor on stale objects
+          await readFromFile();
+          localStorage.setItem(STORE_KEY, JSON.stringify(state));
+          resetUndoBaseline();
+          renderAll();
+          setStatus(`Connected: ${fileHandle.name} — reloaded newer version`, true);
+        }
+      } catch (e) { /* file temporarily unavailable (iCloud sync) — ignore */ }
+    });
+  }
+
+  const activeBoard = () => state.boards.find(b => b.id === state.activeBoard) || state.boards[0];
+
+  // ---------- People / mentions ----------
+  const HANDLE_RE = /@([a-zA-Z0-9_.-]+)/g;
+  const TAG_COLORS = ["#FF4D00", "#4DA3FF", "#3FBF6F", "#FFC24D", "#B36BFF", "#FF5C7A", "#2EE6D6", "#8AFF4D"];
+  let filterHandles = new Set();  // selected @handles (people + departments)
+  let searchQuery = "";
+
+  function validHex(v) {
+    if (!v) return null;
+    v = v.trim();
+    if (v && !v.startsWith("#")) v = "#" + v;
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : null;
+  }
+
+  // A handle can belong to a person OR a department (unified namespace)
+  function handleOwner(handle) {
+    const h = String(handle).toLowerCase();
+    return state.people.find(x => x.handle && x.handle.toLowerCase() === h)
+        || state.departments.find(x => x.handle && x.handle.toLowerCase() === h)
+        || null;
+  }
+  function personColor(handle) { const o = handleOwner(handle); return o ? o.color : null; }
+
+  function normalize() {
+    if (!Array.isArray(state.people)) state.people = [];
+    state.people.forEach((p, i) => {
+      if (!validHex(p.color)) p.color = TAG_COLORS[i % TAG_COLORS.length];
+    });
+    // Departments (global, mirror people including @handles)
+    if (!Array.isArray(state.departments)) state.departments = [];
+    state.departments.forEach((d, i) => {
+      if (!validHex(d.color)) d.color = TAG_COLORS[i % TAG_COLORS.length];
+      if (!d.handle) d.handle = deriveHandle(d.name || ("dept" + i)) || ("dept" + i);
+    });
+    // Board types: default missing type to kanban; ensure the matching container exists
+    (state.boards || []).forEach(b => {
+      if (b.type !== "planner") b.type = "kanban";
+      if (b.type === "kanban" && !Array.isArray(b.lists)) b.lists = [];
+      if (b.type === "planner" && !Array.isArray(b.tasks)) b.tasks = [];
+      // Migrate legacy single assignee -> assignees[]
+      if (b.type === "planner") b.tasks.forEach(t => {
+        if (!Array.isArray(t.assignees)) t.assignees = t.assignee ? [t.assignee] : [];
+        if ("assignee" in t) delete t.assignee;
+      });
+    });
+  }
+
+  function knownHandles() {
+    const s = new Set();
+    state.people.forEach(p => { if (p.handle) s.add(p.handle.toLowerCase()); });
+    state.departments.forEach(d => { if (d.handle) s.add(d.handle.toLowerCase()); });
+    return s;
+  }
+
+  function extractMentions(text, known) {
+    const out = new Set();
+    let m;
+    HANDLE_RE.lastIndex = 0;
+    while ((m = HANDLE_RE.exec(text || ""))) {
+      const h = m[1].toLowerCase();
+      if (known.has(h)) out.add(h);
+    }
+    return out;
+  }
+
+  function cardMentions(card) {
+    const known = knownHandles();
+    const men = extractMentions(card.title, known);
+    for (const h of extractMentions(card.desc, known)) men.add(h);
+    return men;
+  }
+
+  function cardMatchesFilter(card) {
+    // Person filter (@mention) — AND-combined with the text search below
+    if (filterHandles.size) {
+      const men = cardMentions(card);
+      let hit = false;
+      for (const h of filterHandles) if (men.has(h)) { hit = true; break; }
+      if (!hit) return false;
+    }
+    // Text search over title + description
+    if (searchQuery) {
+      const hay = ((card.title || "") + " " + (card.desc || "")).toLowerCase();
+      if (!hay.includes(searchQuery)) return false;
+    }
+    return true;
+  }
+
+  // Build a DOM fragment with known @handles highlighted (no innerHTML)
+  function mentionFragment(text) {
+    const frag = document.createDocumentFragment();
+    const known = knownHandles();
+    let last = 0, m;
+    HANDLE_RE.lastIndex = 0;
+    while ((m = HANDLE_RE.exec(text))) {
+      if (!known.has(m[1].toLowerCase())) continue;
+      if (m.index > last) frag.append(text.slice(last, m.index));
+      const s = document.createElement("span");
+      s.className = "mention";
+      s.textContent = m[0];
+      const col = personColor(m[1]);
+      if (col) s.style.color = col;
+      frag.append(s);
+      last = m.index + m[0].length;
+    }
+    frag.append(text.slice(last));
+    return frag;
+  }
+
+  function deriveHandle(name) {
+    const parts = name.trim().toLowerCase().split(/\s+/);
+    let base = (parts[0] || "").replace(/[^a-z0-9_.-]/g, "");
+    if (!base) return "";
+    const taken = knownHandles();
+    if (!taken.has(base)) return base;
+    // collision: append surname initials, then numbers
+    const surname = (parts[1] || "").replace(/[^a-z0-9]/g, "");
+    for (let i = 1; i <= surname.length; i++) {
+      const c = base + surname.slice(0, i);
+      if (!taken.has(c)) return c;
+    }
+    let n = 2;
+    while (taken.has(base + n)) n++;
+    return base + n;
+  }
+
+  // ---------- @ autocomplete ----------
+  const ac = (() => {
+    let el = null, items = [], idx = 0, target = null, tokenStart = 0;
+
+    function box() {
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "ac";
+        document.body.appendChild(el);
+      }
+      return el;
+    }
+    function close() { if (el) el.style.display = "none"; items = []; target = null; }
+    function isOpen() { return !!(el && el.style.display === "block" && items.length); }
+
+    function onInput(e) {
+      const t = e.target;
+      const pos = t.selectionStart;
+      const before = t.value.slice(0, pos);
+      const m = before.match(/@([a-zA-Z0-9_.-]*)$/);
+      if (!m) { close(); return; }
+      const q = m[1].toLowerCase();
+      const pool = [
+        ...state.people.map(p => ({ handle: p.handle, name: p.name, isDept: false })),
+        ...state.departments.map(d => ({ handle: d.handle, name: d.name, isDept: true }))
+      ];
+      const matches = pool.filter(o =>
+        o.handle.toLowerCase().startsWith(q) || o.name.toLowerCase().includes(q)
+      ).slice(0, 8);
+      if (!matches.length) { close(); return; }
+      items = matches; idx = 0; target = t; tokenStart = pos - m[0].length;
+      render();
+    }
+
+    function render() {
+      const b = box();
+      b.innerHTML = "";
+      items.forEach((p, i) => {
+        const row = document.createElement("div");
+        row.className = "ac-row" + (i === idx ? " on" : "");
+        const h = document.createElement("span");
+        h.className = "ac-handle"; h.textContent = "@" + p.handle;
+        const n = document.createElement("span");
+        n.className = "ac-name"; n.textContent = p.name + (p.isDept ? " · dept" : "");
+        row.append(h, n);
+        row.addEventListener("mousedown", ev => { ev.preventDefault(); pick(i); });
+        b.appendChild(row);
+      });
+      const r = target.getBoundingClientRect();
+      b.style.left = r.left + "px";
+      b.style.top = (r.bottom + 4) + "px";
+      b.style.minWidth = r.width + "px";
+      b.style.display = "block";
+    }
+
+    function pick(i) {
+      const p = items[i];
+      if (!p || !target) return;
+      const t = target, pos = t.selectionStart;
+      t.value = t.value.slice(0, tokenStart) + "@" + p.handle + " " + t.value.slice(pos);
+      const np = tokenStart + p.handle.length + 2;
+      t.setSelectionRange(np, np);
+      close();
+      t.focus();
+    }
+
+    function onKeydown(e) {
+      if (!isOpen() || e.target !== target) return;
+      if (e.key === "ArrowDown") { idx = (idx + 1) % items.length; render(); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { idx = (idx - 1 + items.length) % items.length; render(); e.preventDefault(); }
+      else if (e.key === "Enter" || e.key === "Tab") { pick(idx); e.preventDefault(); e.stopPropagation(); }
+      else if (e.key === "Escape") { close(); e.preventDefault(); e.stopPropagation(); }
+    }
+
+    function attach(input) {
+      input.addEventListener("input", onInput);
+      input.addEventListener("keydown", onKeydown);
+      input.addEventListener("blur", () => setTimeout(close, 120));
+    }
+
+    window.addEventListener("scroll", close, true);
+    return { attach, isOpen, close };
+  })();
+
+  // ---------- Per-person tag color popover ----------
+  const colorPop = (() => {
+    let el = null, person = null;
+    function box() {
+      if (el) return el;
+      el = document.createElement("div");
+      el.className = "color-pop";
+      document.body.appendChild(el);
+      return el;
+    }
+    function close() { if (el) el.style.display = "none"; person = null; }
+    function apply(c) {
+      if (person) { person.color = c; save(); renderAll(); }
+      close();
+    }
+    function open(p, rect) {
+      person = p;
+      const b = box();
+      b.innerHTML = "";
+      const grid = document.createElement("div");
+      grid.className = "cp-grid";
+      TAG_COLORS.forEach(c => {
+        const s = document.createElement("button");
+        s.type = "button";
+        s.className = "cp-swatch" + (p.color === c ? " on" : "");
+        s.style.background = c;
+        s.title = c;
+        s.addEventListener("click", () => apply(c));
+        grid.appendChild(s);
+      });
+      const hex = document.createElement("input");
+      hex.type = "text";
+      hex.placeholder = "#RRGGBB";
+      hex.maxLength = 7;
+      hex.value = p.color || "";
+      hex.addEventListener("keydown", e => {
+        if (e.key === "Enter") { const v = validHex(hex.value); if (v) apply(v); }
+        if (e.key === "Escape") close();
+      });
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "btn subtle";
+      ok.textContent = "Apply Hex";
+      ok.addEventListener("click", () => { const v = validHex(hex.value); if (v) apply(v); else hex.focus(); });
+      b.append(grid, hex, ok);
+      b.style.display = "flex";
+      b.style.left = Math.min(Math.max(8, rect.left - 8), window.innerWidth - 246) + "px";
+      b.style.top = (rect.bottom + 6) + "px";
+    }
+    document.addEventListener("mousedown", e => {
+      if (el && el.style.display === "flex" && !el.contains(e.target)) close();
+    });
+    window.addEventListener("scroll", close, true);
+    return { open, close };
+  })();
+
+  // ---------- People UI ----------
+  const peopleListEl = document.getElementById("peopleList");
+  const nameInput = document.getElementById("newPersonName");
+  const handleInput = document.getElementById("newPersonHandle");
+  let handleTouched = false;
+  let newPersonColor = null;
+  const newColorsRow = document.getElementById("newPersonColors");
+  const newHexInput = document.getElementById("newPersonHex");
+  TAG_COLORS.forEach(c => {
+    const s = document.createElement("button");
+    s.type = "button";
+    s.className = "cp-swatch";
+    s.style.background = c;
+    s.title = c;
+    s.addEventListener("click", () => {
+      newPersonColor = c;
+      newHexInput.value = "";
+      [...newColorsRow.children].forEach(x => x.classList.toggle("on", x === s));
+    });
+    newColorsRow.appendChild(s);
+  });
+  newHexInput.addEventListener("input", () => {
+    if (newHexInput.value.trim()) {
+      newPersonColor = null;
+      [...newColorsRow.children].forEach(x => x.classList.remove("on"));
+    }
+  });
+
+  nameInput.addEventListener("input", () => {
+    if (!handleTouched) handleInput.value = deriveHandle(nameInput.value);
+  });
+  handleInput.addEventListener("input", () => { handleTouched = handleInput.value.trim() !== ""; });
+  document.getElementById("addPersonBtn").addEventListener("click", addPerson);
+  [nameInput, handleInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") addPerson(); }));
+
+  function addPerson() {
+    const name = nameInput.value.trim();
+    let handle = handleInput.value.trim().replace(/^@/, "").toLowerCase();
+    if (!name) { nameInput.focus(); return; }
+    if (!handle) handle = deriveHandle(name);
+    if (!/^[a-z0-9_.-]+$/.test(handle)) { alert("Handles can use letters, numbers, dots, dashes, underscores."); return; }
+    if (knownHandles().has(handle)) { alert(`@${handle} is taken.`); return; }
+    if (newHexInput.value.trim() && !validHex(newHexInput.value)) {
+      alert("Hex colors look like #FF4D00 — six hex digits."); return;
+    }
+    const color = validHex(newHexInput.value) || newPersonColor || TAG_COLORS[state.people.length % TAG_COLORS.length];
+    state.people.push({ id: uid(), name, handle, color });
+    nameInput.value = ""; handleInput.value = ""; handleTouched = false;
+    newHexInput.value = ""; newPersonColor = null;
+    [...newColorsRow.children].forEach(x => x.classList.remove("on"));
+    save(); renderAll();
+  }
+
+  function renderPeople() {
+    peopleListEl.innerHTML = "";
+    const board = activeBoard();
+    state.people.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "person-row" + (filterHandles.has(p.handle.toLowerCase()) ? " filtering" : "");
+      row.title = "Click to filter board by @" + p.handle;
+
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "pdot";
+      dot.style.background = p.color;
+      dot.title = "Change @" + p.handle + "'s tag color";
+      dot.addEventListener("click", e => {
+        e.stopPropagation();
+        colorPop.open(p, dot.getBoundingClientRect());
+      });
+
+      const left = document.createElement("span");
+      left.style.display = "flex";
+      left.style.flexDirection = "column";
+      left.style.gap = "2px";
+      left.style.minWidth = "0";
+      left.style.flex = "1";
+      const nm = document.createElement("span");
+      nm.className = "pname";
+      nm.textContent = p.name;
+      const hd = document.createElement("span");
+      hd.className = "handle";
+      hd.textContent = "@" + p.handle;
+      left.append(nm, hd);
+
+      const right = document.createElement("span");
+      right.style.display = "flex";
+      right.style.gap = "10px";
+      right.style.alignItems = "center";
+
+      let count = 0;
+      if (board && board.lists) board.lists.forEach(l => l.cards.forEach(c => { if (cardMentions(c).has(p.handle.toLowerCase())) count++; }));
+      const cnt = document.createElement("span");
+      cnt.className = "pcount";
+      cnt.textContent = count;
+
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "×";
+      del.title = "Remove person";
+      del.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!confirm(`Remove ${p.name} (@${p.handle})? Existing @${p.handle} text stays in cards but stops being a tag.`)) return;
+        state.people = state.people.filter(x => x.id !== p.id);
+        unassignPersonFromTasks(p.id);
+        filterHandles.delete(p.handle.toLowerCase());
+        save(); renderAll();
+      });
+
+      right.append(cnt, del);
+      row.append(dot, left, right);
+      row.addEventListener("click", () => {
+        const h = p.handle.toLowerCase();
+        filterHandles.has(h) ? filterHandles.delete(h) : filterHandles.add(h);
+        renderAll();
+      });
+      peopleListEl.appendChild(row);
+    });
+  }
+
+  // ---------- Departments UI (sidebar, full parity with People incl. @handles) ----------
+  const departmentsListEl = document.getElementById("departmentsList");
+  const deptNameInput = document.getElementById("newDeptName");
+  const deptHandleInput = document.getElementById("newDeptHandle");
+  const deptColorsRow = document.getElementById("newDeptColors");
+  const deptHexInput = document.getElementById("newDeptHex");
+  let newDeptColor = null;
+  let deptHandleTouched = false;
+  TAG_COLORS.forEach(c => {
+    const s = document.createElement("button");
+    s.type = "button"; s.className = "cp-swatch"; s.style.background = c; s.title = c;
+    s.addEventListener("click", () => {
+      newDeptColor = c; deptHexInput.value = "";
+      [...deptColorsRow.children].forEach(x => x.classList.toggle("on", x === s));
+    });
+    deptColorsRow.appendChild(s);
+  });
+  deptHexInput.addEventListener("input", () => {
+    if (deptHexInput.value.trim()) { newDeptColor = null; [...deptColorsRow.children].forEach(x => x.classList.remove("on")); }
+  });
+  deptNameInput.addEventListener("input", () => { if (!deptHandleTouched) deptHandleInput.value = deriveHandle(deptNameInput.value); });
+  deptHandleInput.addEventListener("input", () => { deptHandleTouched = deptHandleInput.value.trim() !== ""; });
+
+  function addDepartmentFromSidebar() {
+    const name = deptNameInput.value.trim();
+    let handle = deptHandleInput.value.trim().replace(/^@/, "").toLowerCase();
+    if (!name) { deptNameInput.focus(); return; }
+    if (!handle) handle = deriveHandle(name);
+    if (!/^[a-z0-9_.-]+$/.test(handle)) { alert("Handles can use letters, numbers, dots, dashes, underscores."); return; }
+    if (knownHandles().has(handle)) { alert(`@${handle} is taken.`); return; }
+    if (deptHexInput.value.trim() && !validHex(deptHexInput.value)) { alert("Hex colors look like #FF4D00 — six hex digits."); return; }
+    const color = validHex(deptHexInput.value) || newDeptColor || TAG_COLORS[state.departments.length % TAG_COLORS.length];
+    state.departments.push({ id: uid(), name, handle, color });
+    deptNameInput.value = ""; deptHandleInput.value = ""; deptHandleTouched = false;
+    deptHexInput.value = ""; newDeptColor = null;
+    [...deptColorsRow.children].forEach(x => x.classList.remove("on"));
+    save(); renderAll();
+  }
+  document.getElementById("addDeptSidebarBtn").addEventListener("click", addDepartmentFromSidebar);
+  [deptNameInput, deptHandleInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") addDepartmentFromSidebar(); }));
+
+  function renderDepartments() {
+    departmentsListEl.innerHTML = "";
+    const board = activeBoard();
+    const isPlanner = board && board.type === "planner";
+    state.departments.forEach(d => {
+      const dh = (d.handle || "").toLowerCase();
+      const row = document.createElement("div");
+      row.className = "person-row" + (filterHandles.has(dh) ? " filtering" : "");
+      row.title = "Click to filter by " + d.name;
+
+      const dot = document.createElement("button");
+      dot.type = "button"; dot.className = "pdot"; dot.style.background = d.color;
+      dot.title = "Change " + d.name + "'s color";
+      dot.addEventListener("click", e => { e.stopPropagation(); colorPop.open(d, dot.getBoundingClientRect()); });
+
+      const left = document.createElement("span");
+      left.style.cssText = "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1";
+      const nm = document.createElement("span"); nm.className = "pname"; nm.textContent = d.name;
+      const hd = document.createElement("span"); hd.className = "handle"; hd.textContent = "@" + d.handle;
+      left.append(nm, hd);
+
+      const right = document.createElement("span");
+      right.style.cssText = "display:flex;gap:10px;align-items:center";
+      let count = 0;
+      if (isPlanner) (board.tasks || []).forEach(t => { if (!t.archived && (t.assignees || []).some(a => a.type === "dept" && a.id === d.id)) count++; });
+      const cnt = document.createElement("span"); cnt.className = "pcount"; cnt.textContent = count;
+
+      const del = document.createElement("button");
+      del.className = "del"; del.textContent = "×"; del.title = "Remove department";
+      del.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!confirm(`Remove department "${d.name}"? Tasks assigned to it become unassigned; @${d.handle} text stays but stops being a tag.`)) return;
+        filterHandles.delete(dh);
+        removeDepartment(d.id);
+      });
+
+      right.append(cnt, del);
+      row.append(dot, left, right);
+      row.addEventListener("click", () => {
+        filterHandles.has(dh) ? filterHandles.delete(dh) : filterHandles.add(dh);
+        renderAll();
+      });
+      departmentsListEl.appendChild(row);
+    });
+  }
+
+  // Which people/departments are actively filtering the planner (by assignment)
+  function selectedPlannerKeys() {
+    const keys = new Set();
+    filterHandles.forEach(h => {
+      const owner = handleOwner(h);
+      if (!owner) return;
+      keys.add((state.people.includes(owner) ? "person:" : "dept:") + owner.id);
+    });
+    return keys;
+  }
+
+  function renderFilterBanner() {
+    const banner = document.getElementById("filterBanner");
+    if (!filterHandles.size) { banner.hidden = true; banner.innerHTML = ""; return; }
+    const isPlanner = (() => { const b = activeBoard(); return b && b.type === "planner"; })();
+    banner.hidden = false; banner.innerHTML = "";
+    banner.append(isPlanner ? "Showing tasks assigned to " : "Showing cards mentioning ");
+    [...filterHandles].forEach((h, i) => {
+      if (i) banner.append(" or ");
+      const owner = handleOwner(h);
+      const s = document.createElement("span");
+      s.className = "fh";
+      s.textContent = isPlanner ? (owner ? owner.name : "@" + h) : "@" + h;
+      if (owner && owner.color) s.style.color = owner.color;
+      banner.append(s);
+    });
+    const clear = document.createElement("button");
+    clear.className = "btn subtle";
+    clear.textContent = "Clear Filter";
+    clear.addEventListener("click", () => { filterHandles.clear(); renderAll(); });
+    banner.append(clear);
+  }
+
+  // ---------- Sidebar ----------
+  const boardListEl = document.getElementById("boardList");
+
+  function renderSidebar() {
+    boardListEl.innerHTML = "";
+    state.boards.forEach(b => {
+      const item = document.createElement("div");
+      item.className = "board-item" + (b.id === state.activeBoard ? " active" : "");
+      const isPlanner = b.type === "planner";
+      const cardCount = isPlanner
+        ? (b.tasks || []).filter(t => !t.archived).length
+        : (b.lists || []).reduce((n, l) => n + l.cards.filter(c => !c.archived).length, 0);
+
+      const icon = document.createElement("span");
+      icon.className = "board-type-icon";
+      icon.innerHTML = isPlanner
+        ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="21" y2="18"/></svg>'
+        : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="14" rx="1"/></svg>';
+      icon.title = isPlanner ? "Planner" : "Kanban";
+
+      const name = document.createElement("span");
+      name.className = "board-name";
+      name.textContent = b.name;
+
+      const right = document.createElement("span");
+      right.style.display = "flex";
+      right.style.gap = "10px";
+      right.style.alignItems = "center";
+
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = cardCount;
+
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "×";
+      del.title = "Delete board";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const what = isPlanner ? "all its tasks" : "all its cards";
+        if (!confirm(`Delete board "${b.name}" and ${what}?`)) return;
+        state.boards = state.boards.filter(x => x.id !== b.id);
+        if (state.boards.length === 0) state = seed();
+        else if (state.activeBoard === b.id) state.activeBoard = state.boards[0].id;
+        save(); renderAll();
+      });
+
+      right.append(count, del);
+      item.append(icon, name, right);
+      item.addEventListener("click", () => {
+        state.activeBoard = b.id;
+        save(); renderAll();
+      });
+      boardListEl.appendChild(item);
+    });
+  }
+
+  // Board-type segmented control
+  let newBoardType = "kanban";
+  const boardTypeSeg = document.getElementById("boardTypeSeg");
+  boardTypeSeg.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      newBoardType = btn.dataset.type;
+      boardTypeSeg.querySelectorAll(".seg-btn").forEach(b => {
+        const on = b === btn;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-checked", String(on));
+      });
+    });
+  });
+  document.getElementById("addBoardBtn").addEventListener("click", () => addBoard(newBoardType));
+  document.getElementById("newBoardName").addEventListener("keydown", e => { if (e.key === "Enter") addBoard(newBoardType); });
+
+  function addBoard(type) {
+    const input = document.getElementById("newBoardName");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    const b = (type === "planner")
+      ? { id: uid(), name, type: "planner", tasks: [] }
+      : { id: uid(), name, type: "kanban", lists: [] };
+    state.boards.push(b);
+    state.activeBoard = b.id;
+    input.value = "";
+    save(); renderAll();
+  }
+
+  // ---------- Board / lists / cards ----------
+  const boardEl = document.getElementById("board");
+  const boardwrapEl = document.querySelector(".boardwrap");
+  let drag = null; // { type: 'card'|'list', cardId, fromListId, listId }
+
+  // ---------- View prefs: fit-width + collapsed columns (device-local) ----------
+  const COLLAPSED_KEY = "sweckban.collapsedLists";
+  const FIT_WIDTH_KEY = "sweckban.fitWidth";
+  let collapsedLists = new Set();
+  try { collapsedLists = new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || "[]")); } catch (e) {}
+  function saveCollapsed() { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedLists])); } catch (e) {} }
+  function toggleCollapse(listId) {
+    collapsedLists.has(listId) ? collapsedLists.delete(listId) : collapsedLists.add(listId);
+    saveCollapsed(); renderBoard();
+  }
+
+  let fitWidth = true;
+  try { fitWidth = localStorage.getItem(FIT_WIDTH_KEY) !== "0"; } catch (e) {}
+  function applyFitWidth() { boardEl.classList.toggle("fixed-width", !fitWidth); requestAnimationFrame(updateScrollFades); }
+
+  // Planner timeline zoom (device-local)
+  const PLANNER_ZOOM_KEY = "sweckban.plannerZoom";
+  let plannerZoom = "year";
+  try { const z = localStorage.getItem(PLANNER_ZOOM_KEY); if (["year", "quarter", "month"].includes(z)) plannerZoom = z; } catch (e) {}
+  function setPlannerZoom(z) {
+    plannerZoom = z;
+    try { localStorage.setItem(PLANNER_ZOOM_KEY, z); } catch (e) {}
+    renderBoard();
+  }
+  const PLANNER_GROUP_KEY = "sweckban.plannerGroup";
+  let plannerGroup = false;
+  try { plannerGroup = localStorage.getItem(PLANNER_GROUP_KEY) === "1"; } catch (e) {}
+  function setPlannerGroup(on) {
+    plannerGroup = on;
+    try { localStorage.setItem(PLANNER_GROUP_KEY, on ? "1" : "0"); } catch (e) {}
+    renderBoard();
+  }
+
+  // Edge fades: show when the board can scroll further in that direction
+  function updateScrollFades() {
+    const max = boardEl.scrollWidth - boardEl.clientWidth;
+    boardwrapEl.classList.toggle("scroll-left", boardEl.scrollLeft > 1);
+    boardwrapEl.classList.toggle("scroll-right", boardEl.scrollLeft < max - 1);
+  }
+  boardEl.addEventListener("scroll", updateScrollFades);
+  new ResizeObserver(updateScrollFades).observe(boardEl);
+
+  const fitWidthToggle = document.getElementById("fitWidthToggle");
+  fitWidthToggle.checked = fitWidth;
+  applyFitWidth();
+  fitWidthToggle.addEventListener("change", () => {
+    fitWidth = fitWidthToggle.checked;
+    try { localStorage.setItem(FIT_WIDTH_KEY, fitWidth ? "1" : "0"); } catch (e) {}
+    applyFitWidth();
+  });
+
+  // ---------- Departments (global, mirrors people) + assignee/task color resolution ----------
+  function addDepartment(name, color) {
+    name = (name || "").trim();
+    if (!name) return;
+    const c = validHex(color) || TAG_COLORS[state.departments.length % TAG_COLORS.length];
+    state.departments.push({ id: uid(), name, color: c });
+    save(); renderAll();
+  }
+  function removeDepartment(id) {
+    state.departments = state.departments.filter(d => d.id !== id);
+    // Drop this department from any task's assignees
+    state.boards.forEach(b => (b.tasks || []).forEach(t => {
+      if (Array.isArray(t.assignees)) t.assignees = t.assignees.filter(a => !(a.type === "dept" && a.id === id));
+    }));
+    save(); renderAll();
+  }
+  // Drop a person from every planner task's assignees (called on person delete)
+  function unassignPersonFromTasks(id) {
+    state.boards.forEach(b => (b.tasks || []).forEach(t => {
+      if (Array.isArray(t.assignees)) t.assignees = t.assignees.filter(a => !(a.type === "person" && a.id === id));
+    }));
+  }
+  const departmentById = id => state.departments.find(d => d.id === id) || null;
+  const personById = id => state.people.find(p => p.id === id) || null;
+  function assigneeColor(a) {
+    if (!a) return null;
+    if (a.type === "dept") { const d = departmentById(a.id); return d ? d.color : null; }
+    if (a.type === "person") { const p = personById(a.id); return p ? p.color : null; }
+    return null;
+  }
+  function assigneeName(a) {
+    if (!a) return "";
+    if (a.type === "dept") { const d = departmentById(a.id); return d ? d.name : ""; }
+    if (a.type === "person") { const p = personById(a.id); return p ? p.name : ""; }
+    return "";
+  }
+  function taskColor(task) {
+    return validHex(task.color) || assigneeColor((task.assignees || [])[0]) || TAG_COLORS[0];
+  }
+  function plannerRowMatches(task) {
+    if (searchQuery) {
+      const hay = ((task.title || "") + " " + (task.desc || "")).toLowerCase();
+      if (!hay.includes(searchQuery)) return false;
+    }
+    const sel = selectedPlannerKeys();
+    if (sel.size) {
+      const keys = (task.assignees || []).map(a => a.type + ":" + a.id);
+      if (!keys.some(k => sel.has(k))) return false;
+    }
+    return true;
+  }
+
+  // ---------- Planner timeline geometry ----------
+  const PL_DAY = 86400000;
+  const PL_ZOOM = { year: 0.72, quarter: 2.0, month: 5.2 };  // px per day
+  const PL_NAME_W = 220;
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const plParse = s => { if (!s) return null; const d = new Date(s + "T12:00:00"); return isNaN(d) ? null : d; };
+  const plYearStart = y => new Date(y, 0, 1, 12);
+  const plYearEnd = y => new Date(y, 11, 31, 12);
+
+  function plannerRange(board) {
+    const dates = [];
+    (board.tasks || []).filter(t => !t.archived).forEach(t => {
+      [plParse(t.start), plParse(t.end)].forEach(d => d && dates.push(d));
+      (t.milestones || []).forEach(m => { const d = plParse(m.date); if (d) dates.push(d); });
+    });
+    const thisYear = new Date().getFullYear();
+    let minY, maxY;
+    if (!dates.length) { minY = thisYear - 1; maxY = thisYear + 3; }
+    else {
+      minY = Math.min(thisYear, ...dates.map(d => d.getFullYear()));
+      maxY = Math.max(thisYear, ...dates.map(d => d.getFullYear()));
+      if (maxY - minY < 1) maxY = minY + 1;
+    }
+    return { start: plYearStart(minY), end: plYearEnd(maxY), minY, maxY };
+  }
+  function plSubPeriods(minY, maxY, zoom) {
+    const out = [];
+    for (let y = minY; y <= maxY; y++) {
+      if (zoom === "month") for (let m = 0; m < 12; m++) out.push({ date: new Date(y, m, 1, 12), label: MONTHS[m] });
+      else for (let q = 0; q < 4; q++) out.push({ date: new Date(y, q * 3, 1, 12), label: "Q" + (q + 1) });
+    }
+    return out;
+  }
+  function milestoneColor(m, task) {
+    const l = (m.label || "").toLowerCase();
+    if (l.includes("eol")) return "#FF453A";
+    if (l.includes("due")) return "#FFC24D";
+    return taskColor(task);
+  }
+  const fmtDate = d => {
+    const m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  };
+  // Group tasks into swimlanes by assignee (departments, then people, then Unassigned)
+  function plannerGroups(tasks) {
+    if (!plannerGroup) return [{ header: null, tasks }];
+    const keysOf = t => (t.assignees || []).map(a => a.type + ":" + a.id);
+    const order = [];
+    state.departments.forEach(d => order.push({ key: "dept:" + d.id, name: d.name, color: d.color }));
+    state.people.forEach(p => order.push({ key: "person:" + p.id, name: p.name, color: p.color }));
+    const groups = [];
+    const placed = new Set();
+    // A task with multiple assignees appears under each matching lane
+    order.forEach(o => {
+      const ts = tasks.filter(t => keysOf(t).includes(o.key));
+      if (ts.length) { groups.push({ header: o, tasks: ts }); ts.forEach(t => placed.add(t)); }
+    });
+    const unassigned = tasks.filter(t => !(t.assignees || []).length);
+    if (unassigned.length) { groups.push({ header: { key: "none", name: "Unassigned", color: null }, tasks: unassigned }); unassigned.forEach(t => placed.add(t)); }
+    const leftover = tasks.filter(t => !placed.has(t)); // assignees all reference since-deleted ids
+    if (leftover.length) groups.push({ header: { key: "other", name: "Other", color: null }, tasks: leftover });
+    return groups;
+  }
+
+  function renderPlannerGrid(board, grid) {
+    const tasks = (board.tasks || []).filter(t => !t.archived && plannerRowMatches(t));
+    let { start, end, minY, maxY } = plannerRange(board);
+    const pxPerDay = PL_ZOOM[plannerZoom];
+    // Extend the range with whole future years so the timeline fills the visible width
+    // instead of ending mid-screen. Fall back to window width if the board hasn't laid
+    // out yet (clientWidth can read tiny mid-render).
+    let availW = boardEl.clientWidth;
+    if (availW < 100) {
+      const collapsed = document.querySelector(".layout") && document.querySelector(".layout").classList.contains("sidebar-collapsed");
+      availW = window.innerWidth - (collapsed ? 0 : 260);
+    }
+    availW = availW - PL_NAME_W - 6;
+    while (availW > 0 && (Math.round((end - start) / PL_DAY) + 1) * pxPerDay < availW) {
+      maxY += 1;
+      end = plYearEnd(maxY);
+    }
+    const totalDays = Math.round((end - start) / PL_DAY) + 1;
+    const trackW = Math.max(600, Math.round(totalDays * pxPerDay));
+    const xOf = d => ((d - start) / PL_DAY) * pxPerDay;
+
+    const inner = document.createElement("div");
+    inner.className = "pl-inner";
+    inner.style.width = (PL_NAME_W + trackW) + "px";
+
+    // Header: year bands (top) + sub-period labels (bottom)
+    const header = document.createElement("div");
+    header.className = "pl-header";
+    const corner = document.createElement("div");
+    corner.className = "pl-corner";
+    corner.style.width = PL_NAME_W + "px";
+    corner.textContent = "Task";
+    const scale = document.createElement("div");
+    scale.className = "pl-scale";
+    scale.style.width = trackW + "px";
+    for (let y = minY; y <= maxY; y++) {
+      const yl = document.createElement("div");
+      yl.className = "pl-year";
+      yl.style.left = xOf(plYearStart(y)) + "px";
+      yl.style.width = (xOf(plYearStart(y + 1)) - xOf(plYearStart(y))) + "px";
+      yl.textContent = y;
+      scale.appendChild(yl);
+    }
+    const subs = plSubPeriods(minY, maxY, plannerZoom);
+    subs.forEach(s => {
+      const el = document.createElement("div");
+      el.className = "pl-sub";
+      el.style.left = xOf(s.date) + "px";
+      el.textContent = s.label;
+      scale.appendChild(el);
+    });
+    header.append(corner, scale);
+    inner.appendChild(header);
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "pl-body";
+
+    const lines = document.createElement("div");
+    lines.className = "pl-gridlines";
+    lines.style.left = PL_NAME_W + "px";
+    lines.style.width = trackW + "px";
+    for (let y = minY; y <= maxY + 1; y++) {
+      const gl = document.createElement("div");
+      gl.className = "pl-gl pl-gl-year";
+      gl.style.left = xOf(plYearStart(y)) + "px";
+      lines.appendChild(gl);
+    }
+    subs.forEach(s => {
+      const gl = document.createElement("div");
+      gl.className = "pl-gl";
+      gl.style.left = xOf(s.date) + "px";
+      lines.appendChild(gl);
+    });
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    if (today >= start && today <= end) {
+      const tl = document.createElement("div");
+      tl.className = "pl-today";
+      tl.style.left = xOf(today) + "px";
+      tl.title = "Today";
+      lines.appendChild(tl);
+    }
+    body.appendChild(lines);
+
+    // Drag a bar to move it (body) or resize it (edge handles); a click with no
+    // movement opens the task modal. Commits new start/end on mouseup.
+    function attachBarDrag(bar, task) {
+      bar.addEventListener("mousedown", e => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const t = e.target;
+        const mode = (t.classList.contains("pl-bar-handle") && t.classList.contains("l")) ? "resize-l"
+                   : (t.classList.contains("pl-bar-handle") && t.classList.contains("r")) ? "resize-r"
+                   : "move";
+        const startX = e.clientX;
+        const origS = plParse(task.start), origE = plParse(task.end);
+        let pend = null;
+        document.body.classList.add("pl-dragging");
+        const onMove = ev => {
+          const dd = Math.round((ev.clientX - startX) / pxPerDay);
+          let s = new Date(origS), en = new Date(origE);
+          if (mode === "move") { s.setDate(s.getDate() + dd); en.setDate(en.getDate() + dd); }
+          else if (mode === "resize-l") { s.setDate(s.getDate() + dd); if (s > en) s = new Date(en); }
+          else { en.setDate(en.getDate() + dd); if (en < s) en = new Date(s); }
+          bar.style.left = xOf(s) + "px";
+          bar.style.width = Math.max(4, xOf(en) - xOf(s)) + "px";
+          pend = { s, en };
+        };
+        const onUp = ev => {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          document.body.classList.remove("pl-dragging");
+          if (!pend || Math.abs(ev.clientX - startX) <= 3) { openTaskModal(board, task); return; }
+          task.start = fmtDate(pend.s);
+          task.end = fmtDate(pend.en);
+          save(); renderAll();
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    }
+
+    function renderTaskRow(task) {
+      const row = document.createElement("div");
+      row.className = "pl-row";
+
+      const name = document.createElement("div");
+      name.className = "pl-name";
+      name.style.width = PL_NAME_W + "px";
+      const dot = document.createElement("span");
+      dot.className = "pl-name-dot";
+      dot.style.background = taskColor(task);
+      const tt = document.createElement("span");
+      tt.className = "pl-name-text";
+      tt.textContent = task.title || "(untitled)";
+      name.append(dot, tt);
+      name.addEventListener("click", () => openTaskModal(board, task));
+
+      const track = document.createElement("div");
+      track.className = "pl-track";
+      track.style.width = trackW + "px";
+      track.addEventListener("click", e => { if (e.target === track) openTaskModal(board, task); });
+
+      const s = plParse(task.start), en = plParse(task.end);
+      if (s && en && en >= s) {
+        const bar = document.createElement("div");
+        bar.className = "pl-bar";
+        bar.style.left = xOf(s) + "px";
+        bar.style.width = Math.max(4, xOf(en) - xOf(s)) + "px";
+        bar.style.background = taskColor(task);
+        bar.title = task.title;
+        const hl = document.createElement("span"); hl.className = "pl-bar-handle l";
+        const lbl = document.createElement("span"); lbl.className = "pl-bar-label"; lbl.textContent = task.title;
+        const hr = document.createElement("span"); hr.className = "pl-bar-handle r";
+        bar.append(hl, lbl, hr);
+        attachBarDrag(bar, task);
+        track.appendChild(bar);
+      } else if (s || en) {
+        const pt = document.createElement("div");
+        pt.className = "pl-point";
+        pt.style.left = xOf(s || en) + "px";
+        pt.style.background = taskColor(task);
+        pt.title = task.title;
+        pt.addEventListener("click", () => openTaskModal(board, task));
+        track.appendChild(pt);
+      }
+      (task.milestones || []).forEach(m => {
+        const d = plParse(m.date);
+        if (!d) return;
+        const col = milestoneColor(m, task);
+        const ms = document.createElement("div");
+        ms.className = "pl-ms";
+        ms.style.left = xOf(d) + "px";
+        ms.title = (m.label || "Milestone") + " — " + m.date;
+        ms.addEventListener("click", () => openTaskModal(board, task));
+        const diamond = document.createElement("span");
+        diamond.className = "pl-ms-diamond";
+        diamond.style.background = col;
+        ms.appendChild(diamond);
+        if (m.label) {
+          const lbl = document.createElement("span");
+          lbl.className = "pl-ms-label";
+          lbl.textContent = m.label;
+          ms.appendChild(lbl);
+        }
+        track.appendChild(ms);
+      });
+
+      row.append(name, track);
+      return row;
+    }
+
+    // Swimlanes (grouped) or a flat list
+    plannerGroups(tasks).forEach(g => {
+      if (g.header) {
+        const lane = document.createElement("div");
+        lane.className = "pl-row pl-lane";
+        const lname = document.createElement("div");
+        lname.className = "pl-name pl-lane-name";
+        lname.style.width = PL_NAME_W + "px";
+        if (g.header.color) {
+          const ld = document.createElement("span");
+          ld.className = "pl-name-dot";
+          ld.style.background = g.header.color;
+          lname.appendChild(ld);
+        }
+        const lt = document.createElement("span");
+        lt.className = "pl-lane-text";
+        lt.textContent = `${g.header.name}  (${g.tasks.length})`;
+        lname.appendChild(lt);
+        const ltrack = document.createElement("div");
+        ltrack.className = "pl-track pl-lane-track";
+        ltrack.style.width = trackW + "px";
+        lane.append(lname, ltrack);
+        body.appendChild(lane);
+      }
+      g.tasks.forEach(task => body.appendChild(renderTaskRow(task)));
+    });
+
+    inner.appendChild(body);
+    grid.appendChild(inner);
+
+    if (!tasks.length) {
+      const empty = document.createElement("div");
+      empty.className = "planner-empty";
+      empty.textContent = "No tasks yet. Click “+ Add Task” to start planning.";
+      grid.appendChild(empty);
+    }
+  }
+
+  // Planner (Gantt) rendering
+  function renderPlanner(board) {
+    const root = document.createElement("div");
+    root.className = "planner";
+
+    // ----- Toolbar: add task + department legend/management -----
+    const toolbar = document.createElement("div");
+    toolbar.className = "planner-toolbar";
+
+    const left = document.createElement("div");
+    left.className = "planner-toolbar-left";
+    const addTaskBtn = document.createElement("button");
+    addTaskBtn.className = "btn";
+    addTaskBtn.textContent = "+ Add Task";
+    addTaskBtn.addEventListener("click", () => openTaskModal(board, null));
+    left.appendChild(addTaskBtn);
+
+    // Zoom control
+    const zoomSeg = document.createElement("div");
+    zoomSeg.className = "seg";
+    [["year", "Year"], ["quarter", "Quarter"], ["month", "Month"]].forEach(([val, label]) => {
+      const b = document.createElement("button");
+      b.className = "seg-btn" + (plannerZoom === val ? " on" : "");
+      b.textContent = label;
+      b.addEventListener("click", () => setPlannerZoom(val));
+      zoomSeg.appendChild(b);
+    });
+    left.appendChild(zoomSeg);
+
+    const groupBtn = document.createElement("button");
+    groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
+    groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
+    groupBtn.title = "Group rows into swimlanes by assignee";
+    groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
+    left.appendChild(groupBtn);
+
+    toolbar.append(left);
+    root.appendChild(toolbar);
+
+    // ----- Timeline grid -----
+    const grid = document.createElement("div");
+    grid.className = "planner-grid";
+    renderPlannerGrid(board, grid);
+    root.appendChild(grid);
+
+    boardEl.appendChild(root);
+  }
+
+  // ---------- Task modal (planner) ----------
+  const taskOverlay = document.getElementById("taskOverlay");
+  const tTitle = document.getElementById("tTitle");
+  const tDesc = document.getElementById("tDesc");
+  const tStart = document.getElementById("tStart");
+  const tEnd = document.getElementById("tEnd");
+  const tAssignees = document.getElementById("tAssignees");
+  const tColor = document.getElementById("tColor");
+  const tColorReset = document.getElementById("tColorReset");
+  const tMilestonesEl = document.getElementById("tMilestones");
+  let taskRef = null;          // { board, task, isNew }
+  let taskMs = [];             // working milestone copies
+  let taskColorOverride = "";  // "" (use assignee) or hex
+
+  const keyOfAssignee = a => a.type + ":" + a.id;
+  function assigneeFromKey(k) { const i = k.indexOf(":"); return { type: k.slice(0, i), id: k.slice(i + 1) }; }
+  function selectedAssigneeKeys() {
+    return [...tAssignees.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
+  }
+  function buildAssigneeCheckboxes(selectedKeys) {
+    tAssignees.innerHTML = "";
+    const sel = new Set(selectedKeys);
+    const section = (title, items, type) => {
+      if (!items.length) return;
+      const h = document.createElement("div"); h.className = "assignee-group"; h.textContent = title;
+      tAssignees.appendChild(h);
+      items.forEach(it => {
+        const key = type + ":" + it.id;
+        const row = document.createElement("label"); row.className = "assignee-row";
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = key; cb.checked = sel.has(key);
+        const dot = document.createElement("span"); dot.className = "pl-name-dot"; dot.style.background = it.color;
+        const nm = document.createElement("span"); nm.className = "assignee-name"; nm.textContent = it.name;
+        row.append(cb, dot, nm);
+        tAssignees.appendChild(row);
+      });
+    };
+    section("Departments", state.departments, "dept");
+    section("People", state.people, "person");
+    if (!state.departments.length && !state.people.length) {
+      const e = document.createElement("div"); e.className = "ms-empty";
+      e.textContent = "No departments or people yet.";
+      tAssignees.appendChild(e);
+    }
+  }
+  function modalResolvedColor() {
+    if (validHex(taskColorOverride)) return taskColorOverride;
+    const first = selectedAssigneeKeys()[0];
+    return (first && assigneeColor(assigneeFromKey(first))) || TAG_COLORS[0];
+  }
+  function syncTaskColor() {
+    tColor.value = modalResolvedColor();
+    tColorReset.disabled = !validHex(taskColorOverride);
+  }
+  function renderMilestoneRows() {
+    tMilestonesEl.innerHTML = "";
+    if (!taskMs.length) {
+      const hint = document.createElement("div");
+      hint.className = "ms-empty";
+      hint.textContent = "No milestones.";
+      tMilestonesEl.appendChild(hint);
+      return;
+    }
+    taskMs.forEach((m, i) => {
+      const row = document.createElement("div");
+      row.className = "ms-row";
+      const label = document.createElement("input");
+      label.type = "text"; label.placeholder = "Label (e.g. EOL)"; label.maxLength = 40; label.value = m.label || "";
+      label.addEventListener("input", () => { m.label = label.value; });
+      const date = document.createElement("input");
+      date.type = "date"; date.value = m.date || "";
+      date.addEventListener("input", () => { m.date = date.value; });
+      const del = document.createElement("button");
+      del.className = "btn subtle mini"; del.textContent = "×"; del.title = "Remove milestone";
+      del.addEventListener("click", () => { taskMs.splice(i, 1); renderMilestoneRows(); });
+      row.append(label, date, del);
+      tMilestonesEl.appendChild(row);
+    });
+  }
+
+  function openTaskModal(board, task) {
+    const isNew = !task;
+    const t = task || { id: uid(), title: "", desc: "", start: "", end: "", assignees: [], color: "", milestones: [] };
+    taskRef = { board, task: t, isNew };
+    taskMs = (t.milestones || []).map(m => ({ ...m }));
+    taskColorOverride = t.color || "";
+    document.getElementById("taskModalTitle").textContent = isNew ? "New Task" : "Edit Task";
+    tTitle.value = t.title || "";
+    tDesc.value = t.desc || "";
+    tStart.value = t.start || "";
+    tEnd.value = t.end || "";
+    buildAssigneeCheckboxes((t.assignees || []).map(keyOfAssignee));
+    syncTaskColor();
+    renderMilestoneRows();
+    document.getElementById("tDelete").style.display = isNew ? "none" : "";
+    taskOverlay.classList.add("open");
+    tTitle.focus();
+  }
+  function closeTaskModal() { taskOverlay.classList.remove("open"); taskRef = null; }
+
+  tColor.addEventListener("input", () => { taskColorOverride = tColor.value; syncTaskColor(); });
+  tColorReset.addEventListener("click", () => { taskColorOverride = ""; syncTaskColor(); });
+  tAssignees.addEventListener("change", () => { if (!validHex(taskColorOverride)) syncTaskColor(); });
+  document.getElementById("tAddDue").addEventListener("click", () => { taskMs.push({ id: uid(), label: "Due", date: "" }); renderMilestoneRows(); });
+  document.getElementById("tAddEol").addEventListener("click", () => { taskMs.push({ id: uid(), label: "EOL", date: "" }); renderMilestoneRows(); });
+  document.getElementById("tAddMs").addEventListener("click", () => { taskMs.push({ id: uid(), label: "", date: "" }); renderMilestoneRows(); });
+  document.getElementById("tCancel").addEventListener("click", closeTaskModal);
+  taskOverlay.addEventListener("click", e => { if (e.target === taskOverlay) closeTaskModal(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && taskOverlay.classList.contains("open")) closeTaskModal(); });
+
+  document.getElementById("tSave").addEventListener("click", () => {
+    if (!taskRef) return;
+    const t = taskRef.task;
+    t.title = tTitle.value.trim() || "Untitled";
+    t.desc = tDesc.value;
+    t.start = tStart.value || "";
+    t.end = tEnd.value || "";
+    t.assignees = selectedAssigneeKeys().map(assigneeFromKey);
+    t.color = validHex(taskColorOverride) || "";
+    t.milestones = taskMs.filter(m => m.date).map(m => ({ id: m.id || uid(), label: (m.label || "").trim(), date: m.date }));
+    if (taskRef.isNew) taskRef.board.tasks.push(t);
+    save(); closeTaskModal(); renderAll();
+  });
+  document.getElementById("tDelete").addEventListener("click", () => {
+    if (!taskRef || taskRef.isNew) return;
+    if (!confirm(`Delete task "${taskRef.task.title}"?`)) return;
+    taskRef.board.tasks = taskRef.board.tasks.filter(x => x.id !== taskRef.task.id);
+    save(); closeTaskModal(); renderAll();
+  });
+
+  function renderBoard() {
+    boardEl.innerHTML = "";
+    const board = activeBoard();
+    if (!board) return;
+
+    // Planner boards render a Gantt timeline instead of kanban columns
+    const isPlanner = board.type === "planner";
+    boardEl.classList.toggle("planner-mode", isPlanner);
+    if (isPlanner) { renderPlanner(board); return; }
+
+    board.lists.forEach(list => boardEl.appendChild(renderList(board, list)));
+
+    // Add-list column
+    const addWrap = document.createElement("div");
+    addWrap.className = "add-list stack";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "New list name";
+    input.maxLength = 60;
+    const btn = document.createElement("button");
+    btn.className = "btn subtle";
+    btn.textContent = "+ Add List";
+    const commit = () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      board.lists.push({ id: uid(), name, cards: [] });
+      save(); renderAll();
+    };
+    btn.addEventListener("click", commit);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") commit(); });
+    addWrap.append(input, btn);
+    boardEl.appendChild(addWrap);
+
+    if (board.lists.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-board";
+      empty.textContent = "// Empty board. Add a list to start.";
+      boardEl.prepend(empty);
+    }
+
+    requestAnimationFrame(updateScrollFades);
+  }
+
+  function renderList(board, list) {
+    const isCollapsed = collapsedLists.has(list.id);
+    const el = document.createElement("div");
+    el.className = "list" + (isCollapsed ? " collapsed" : "");
+    el.dataset.listId = list.id;
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "list-header";
+    header.draggable = true;
+
+    // Collapse / expand toggle
+    const collapseBtn = document.createElement("button");
+    collapseBtn.className = "list-collapse";
+    collapseBtn.title = isCollapsed ? "Expand list" : "Collapse list";
+    collapseBtn.setAttribute("aria-label", collapseBtn.title);
+    collapseBtn.innerHTML = '<svg class="chev" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M6.5 1.5 L3 5 L6.5 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    collapseBtn.addEventListener("click", e => { e.stopPropagation(); toggleCollapse(list.id); });
+
+    const title = document.createElement("div");
+    title.className = "list-title";
+    title.textContent = list.name;
+    title.title = isCollapsed ? "Expand list" : "Click to rename";
+    title.addEventListener("click", () => {
+      if (collapsedLists.has(list.id)) { toggleCollapse(list.id); return; }
+      startRename(title, list, board);
+    });
+
+    const right = document.createElement("span");
+    right.className = "list-right";
+    right.style.display = "flex";
+    right.style.gap = "10px";
+    right.style.alignItems = "center";
+
+    const count = document.createElement("span");
+    count.className = "list-count";
+    const activeCards = list.cards.filter(c => !c.archived);
+    const visCount = activeCards.filter(cardMatchesFilter).length;
+    count.textContent = (filterHandles.size || searchQuery) ? `${visCount}/${activeCards.length}` : activeCards.length;
+
+    const del = document.createElement("button");
+    del.className = "list-del";
+    del.textContent = "×";
+    del.title = "Delete list";
+    del.addEventListener("click", () => {
+      if (list.cards.length && !confirm(`Delete list "${list.name}" and its ${list.cards.length} card(s)?`)) return;
+      board.lists = board.lists.filter(l => l.id !== list.id);
+      save(); renderAll();
+    });
+
+    right.append(count, del);
+    header.append(collapseBtn, title, right);
+
+    // List drag (reorder lists)
+    header.addEventListener("dragstart", e => {
+      drag = { type: "list", listId: list.id };
+      e.dataTransfer.effectAllowed = "move";
+    });
+    header.addEventListener("dragend", () => { drag = null; clearListHighlights(); });
+
+    // Cards (respecting any active person filter)
+    const cardsEl = document.createElement("div");
+    cardsEl.className = "cards";
+    const visible = activeCards.filter(cardMatchesFilter);
+    visible.forEach(card => cardsEl.appendChild(renderCard(board, list, card)));
+
+    // Footer: add card
+    const footer = document.createElement("div");
+    footer.className = "list-footer";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.className = "add-card-input";
+    addInput.placeholder = "+ Add card, press Enter";
+    addInput.maxLength = 200;
+    addInput.addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      if (ac.isOpen()) return; // Enter is claiming an @mention, not submitting
+      const t = addInput.value.trim();
+      if (!t) return;
+      list.cards.push({ id: uid(), title: t, desc: "", labels: [], due: "" });
+      addInput.value = "";
+      save(); renderAll();
+      // restore focus to the same list's add input
+      const again = boardEl.querySelector(`.list[data-list-id="${list.id}"] .add-card-input`);
+      if (again) again.focus();
+    });
+    ac.attach(addInput);
+    footer.appendChild(addInput);
+
+    el.append(header, cardsEl, footer);
+
+    // Drop targets
+    el.addEventListener("dragover", e => {
+      if (!drag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (drag.type === "card") {
+        el.classList.add("drag-over-list");
+        positionIndicator(cardsEl, e.clientY);
+      }
+    });
+    el.addEventListener("dragleave", e => {
+      if (!el.contains(e.relatedTarget)) {
+        el.classList.remove("drag-over-list");
+        removeIndicator(cardsEl);
+      }
+    });
+    el.addEventListener("drop", e => {
+      e.preventDefault();
+      if (!drag) return;
+      if (drag.type === "card") {
+        const idx = indicatorIndex(cardsEl);
+        removeIndicator(cardsEl);
+        moveCard(board, drag.cardId, drag.fromListId, list.id, idx);
+      } else if (drag.type === "list" && drag.listId !== list.id) {
+        moveList(board, drag.listId, list.id);
+      }
+      drag = null;
+      clearListHighlights();
+    });
+
+    return el;
+  }
+
+  function renderCard(board, list, card) {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.draggable = true;
+    el.dataset.cardId = card.id;
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.appendChild(mentionFragment(card.title));
+
+    const meta = document.createElement("div");
+    meta.className = "card-meta";
+    (card.labels || []).forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.style.background = c;
+      meta.appendChild(chip);
+    });
+    // Badge mentions that live only in the description, so they're visible on the card
+    const known = knownHandles();
+    const inTitle = extractMentions(card.title, known);
+    for (const h of extractMentions(card.desc, known)) {
+      if (inTitle.has(h)) continue;
+      const b = document.createElement("span");
+      b.className = "mention-badge";
+      b.textContent = "@" + h;
+      const bc = personColor(h);
+      if (bc) { b.style.color = bc; b.style.borderColor = bc; }
+      meta.appendChild(b);
+    }
+    if (card.due) {
+      const due = document.createElement("span");
+      due.className = "due" + (isOverdue(card.due) ? " overdue" : "");
+      due.textContent = card.due;
+      meta.appendChild(due);
+    }
+    if (card.desc && card.desc.trim()) {
+      const d = document.createElement("span");
+      d.className = "has-desc";
+      d.textContent = "≡";
+      d.title = "Has description";
+      meta.appendChild(d);
+    }
+
+    el.append(title, meta);
+
+    el.addEventListener("dragstart", e => {
+      drag = { type: "card", cardId: card.id, fromListId: list.id };
+      el.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.stopPropagation();
+    });
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+      drag = null;
+      clearListHighlights();
+      document.querySelectorAll(".drop-indicator").forEach(n => n.remove());
+    });
+    el.addEventListener("click", () => openModal(board, list, card));
+
+    return el;
+  }
+
+  function isOverdue(dateStr) {
+    const today = new Date();
+    const d = new Date(dateStr + "T23:59:59");
+    return d < today;
+  }
+
+  // ---------- Rename list inline ----------
+  function startRename(titleEl, list, board) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = list.name;
+    input.maxLength = 60;
+    titleEl.replaceChildren(input);
+    input.focus();
+    input.select();
+    const commit = () => {
+      const v = input.value.trim();
+      if (v) list.name = v;
+      save(); renderAll();
+    };
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") commit();
+      if (e.key === "Escape") { renderBoard(); }
+    });
+    input.addEventListener("blur", commit);
+    input.addEventListener("click", e => e.stopPropagation());
+  }
+
+  // ---------- Drag helpers ----------
+  function clearListHighlights() {
+    document.querySelectorAll(".list.drag-over-list").forEach(n => n.classList.remove("drag-over-list"));
+    document.querySelectorAll(".drop-indicator").forEach(n => n.remove());
+  }
+
+  function positionIndicator(cardsEl, y) {
+    removeIndicator(cardsEl);
+    const ind = document.createElement("div");
+    ind.className = "drop-indicator";
+    const cards = [...cardsEl.querySelectorAll(".card:not(.dragging)")];
+    const after = cards.find(c => y < c.getBoundingClientRect().top + c.offsetHeight / 2);
+    if (after) cardsEl.insertBefore(ind, after);
+    else cardsEl.appendChild(ind);
+  }
+
+  function removeIndicator(cardsEl) {
+    cardsEl.querySelectorAll(".drop-indicator").forEach(n => n.remove());
+  }
+
+  function indicatorIndex(cardsEl) {
+    const children = [...cardsEl.children];
+    let idx = 0;
+    for (const child of children) {
+      if (child.classList.contains("drop-indicator")) return idx;
+      if (child.classList.contains("card") && !child.classList.contains("dragging")) idx++;
+    }
+    return idx;
+  }
+
+  function moveCard(board, cardId, fromListId, toListId, toIndex) {
+    const from = board.lists.find(l => l.id === fromListId);
+    const to = board.lists.find(l => l.id === toListId);
+    if (!from || !to) return;
+    const i = from.cards.findIndex(c => c.id === cardId);
+    if (i === -1) return;
+    const [card] = from.cards.splice(i, 1);
+    if (toIndex == null || toIndex > to.cards.length) toIndex = to.cards.length;
+    to.cards.splice(toIndex, 0, card);
+    save(); renderAll();
+  }
+
+  function moveList(board, dragId, targetId) {
+    const fromIdx = board.lists.findIndex(l => l.id === dragId);
+    const toIdx = board.lists.findIndex(l => l.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [l] = board.lists.splice(fromIdx, 1);
+    board.lists.splice(toIdx, 0, l);
+    save(); renderBoard();
+  }
+
+  // ---------- Modal ----------
+  const overlay = document.getElementById("overlay");
+  const mTitle = document.getElementById("mTitle");
+  const mDesc = document.getElementById("mDesc");
+  const mDue = document.getElementById("mDue");
+  const mLabels = document.getElementById("mLabels");
+  const mContext = document.getElementById("modalContext");
+  let modalRef = null; // { board, list, card }
+  let modalLabels = [];
+
+  function openModal(board, list, card) {
+    modalRef = { board, list, card };
+    modalLabels = [...(card.labels || [])];
+    mTitle.value = card.title;
+    mDesc.value = card.desc || "";
+    mDue.value = card.due || "";
+    mContext.innerHTML = "";
+    const b = document.createElement("b"); b.textContent = list.name;
+    mContext.append(document.createTextNode("in list "), b);
+    renderLabelPicker();
+    overlay.classList.add("open");
+    mTitle.focus();
+  }
+
+  function renderLabelPicker() {
+    mLabels.innerHTML = "";
+    LABEL_COLORS.forEach(c => {
+      const sw = document.createElement("button");
+      sw.type = "button";
+      sw.className = "label-swatch" + (modalLabels.includes(c) ? " on" : "");
+      sw.style.background = c;
+      sw.title = c;
+      sw.addEventListener("click", () => {
+        modalLabels = modalLabels.includes(c) ? modalLabels.filter(x => x !== c) : [...modalLabels, c];
+        renderLabelPicker();
+      });
+      mLabels.appendChild(sw);
+    });
+  }
+
+  function closeModal() {
+    overlay.classList.remove("open");
+    modalRef = null;
+  }
+
+  document.getElementById("mSave").addEventListener("click", () => {
+    if (!modalRef) return;
+    const t = mTitle.value.trim();
+    if (t) modalRef.card.title = t;
+    modalRef.card.desc = mDesc.value;
+    modalRef.card.due = mDue.value;
+    modalRef.card.labels = modalLabels;
+    save(); closeModal(); renderAll();
+  });
+  document.getElementById("mCancel").addEventListener("click", closeModal);
+  document.getElementById("mDelete").addEventListener("click", () => {
+    if (!modalRef) return;
+    // Archive (soft-delete) — recoverable from the Archive drawer
+    modalRef.card.archived = true;
+    save(); closeModal(); renderAll();
+  });
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && overlay.classList.contains("open")) closeModal();
+  });
+
+  // ---------- Export / Import ----------
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `sweckban-backup-${stamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+  document.getElementById("importFile").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!parsed || !Array.isArray(parsed.boards)) throw new Error("Not a Sweckban backup");
+        if (!confirm("Importing replaces all current boards. Continue?")) return;
+        state = parsed;
+        if (!state.boards.find(b => b.id === state.activeBoard)) {
+          state.activeBoard = state.boards[0] ? state.boards[0].id : null;
+        }
+        if (state.boards.length === 0) state = seed();
+        save(); renderAll();
+      } catch (err) {
+        alert("Import failed: that file isn't a valid Sweckban JSON backup.");
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  // ---------- Init ----------
+  function renderAll() {
+    normalize();
+    renderSidebar();
+    renderPeople();
+    renderDepartments();
+    renderFilterBanner();
+    renderBoard();
+    updateArchiveButton();
+    updateDockBadge();
+  }
+
+  ac.attach(mTitle);
+  ac.attach(mDesc);
+
+  // ---------- Theme (device-local preference, not synced) ----------
+  const THEME_KEY = "sweckban.theme";
+  const themeBtn = document.getElementById("themeBtn");
+  function applyTheme(t) {
+    document.body.classList.toggle("light", t === "light");
+    themeBtn.textContent = t === "light" ? "Dark Mode" : "Light Mode";
+  }
+  let theme = "dark";
+  try { theme = localStorage.getItem(THEME_KEY) || "dark"; } catch (e) {}
+  applyTheme(theme);
+  themeBtn.addEventListener("click", () => {
+    theme = theme === "light" ? "dark" : "light";
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+    applyTheme(theme);
+    syncCustomInputs(); // reflect the new theme's default colors in the swatches
+  });
+
+  // ---------- Customize: colors + background image (device-local, not synced) ----------
+  const CUSTOM_KEYS = { bg: "sweckban.custom.bg", sidebar: "sweckban.custom.sidebar", accent: "sweckban.custom.accent" };
+  const CUSTOM_VAR = { bg: "--bg", sidebar: "--sidebar", accent: "--accent" };
+  const BG_IMAGE_KEY = "sweckban.bgImage";
+  const BG_OPACITY_KEY = "sweckban.bgOpacity";
+  const bgLayer = document.getElementById("bgLayer");
+  const custom = { bg: "", sidebar: "", accent: "" };
+  let bgImage = "", bgOpacity = 100;
+  try {
+    custom.bg = localStorage.getItem(CUSTOM_KEYS.bg) || "";
+    custom.sidebar = localStorage.getItem(CUSTOM_KEYS.sidebar) || "";
+    custom.accent = localStorage.getItem(CUSTOM_KEYS.accent) || "";
+    bgImage = localStorage.getItem(BG_IMAGE_KEY) || "";
+    const o = localStorage.getItem(BG_OPACITY_KEY);
+    if (o !== null) bgOpacity = Math.max(0, Math.min(100, parseInt(o, 10) || 0));
+  } catch (e) {}
+
+  function applyCustomTheme() {
+    for (const k of ["bg", "sidebar", "accent"]) {
+      if (custom[k]) document.body.style.setProperty(CUSTOM_VAR[k], custom[k]);
+      else document.body.style.removeProperty(CUSTOM_VAR[k]);
+    }
+    bgLayer.style.backgroundImage = bgImage ? `url("${bgImage}")` : "";
+    bgLayer.style.opacity = String(bgOpacity / 100);
+  }
+
+  // Current effective value of a CSS var as a #rrggbb string (for the color pickers)
+  function effectiveColor(varName) {
+    let v = getComputedStyle(document.body).getPropertyValue(varName).trim();
+    if (!v) return "#000000";
+    if (v[0] === "#") {
+      if (v.length === 4) v = "#" + v[1]+v[1]+v[2]+v[2]+v[3]+v[3];
+      return v.toLowerCase();
+    }
+    const m = v.match(/(\d+),\s*(\d+),\s*(\d+)/);
+    if (m) return "#" + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, "0")).join("");
+    return "#000000";
+  }
+
+  const bgColorInput = document.getElementById("bgColorInput");
+  const sidebarColorInput = document.getElementById("sidebarColorInput");
+  const accentColorInput = document.getElementById("accentColorInput");
+  const bgImageChoose = document.getElementById("bgImageChoose");
+  const bgImageRemove = document.getElementById("bgImageRemove");
+  const bgImageFile = document.getElementById("bgImageFile");
+  const bgOpacityRow = document.getElementById("bgOpacityRow");
+  const bgOpacityInput = document.getElementById("bgOpacityInput");
+  const bgOpacityVal = document.getElementById("bgOpacityVal");
+
+  function syncCustomInputs() {
+    bgColorInput.value = custom.bg || effectiveColor("--bg");
+    sidebarColorInput.value = custom.sidebar || effectiveColor("--sidebar");
+    accentColorInput.value = custom.accent || effectiveColor("--accent");
+    bgImageRemove.hidden = !bgImage;
+    bgImageChoose.textContent = bgImage ? "Replace…" : "Choose…";
+    bgOpacityInput.value = String(bgOpacity);
+    bgOpacityVal.textContent = bgOpacity + "%";
+    bgOpacityRow.classList.toggle("disabled", !bgImage);
+  }
+
+  function setCustomColor(key, value) {
+    custom[key] = value || "";
+    try { value ? localStorage.setItem(CUSTOM_KEYS[key], value) : localStorage.removeItem(CUSTOM_KEYS[key]); } catch (e) {}
+    applyCustomTheme();
+  }
+
+  bgColorInput.addEventListener("input", () => setCustomColor("bg", bgColorInput.value));
+  sidebarColorInput.addEventListener("input", () => setCustomColor("sidebar", sidebarColorInput.value));
+  accentColorInput.addEventListener("input", () => setCustomColor("accent", accentColorInput.value));
+  document.getElementById("bgColorReset").addEventListener("click", () => { setCustomColor("bg", ""); syncCustomInputs(); });
+  document.getElementById("sidebarColorReset").addEventListener("click", () => { setCustomColor("sidebar", ""); syncCustomInputs(); });
+  document.getElementById("accentColorReset").addEventListener("click", () => { setCustomColor("accent", ""); syncCustomInputs(); });
+
+  // Background image: downscale + JPEG-compress before storing so localStorage stays small
+  bgImageChoose.addEventListener("click", () => bgImageFile.click());
+  bgImageFile.addEventListener("change", () => {
+    const file = bgImageFile.files[0];
+    bgImageFile.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 2560;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const s = MAX / Math.max(width, height);
+          width = Math.round(width * s); height = Math.round(height * s);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        let dataUrl;
+        try { dataUrl = canvas.toDataURL("image/jpeg", 0.85); }
+        catch (e) { dataUrl = reader.result; }
+        try {
+          localStorage.setItem(BG_IMAGE_KEY, dataUrl);
+          bgImage = dataUrl;
+          applyCustomTheme(); syncCustomInputs();
+        } catch (e) {
+          alert("That image is too large to save. Try a smaller image.");
+        }
+      };
+      img.onerror = () => alert("Couldn't read that image file.");
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  bgImageRemove.addEventListener("click", () => {
+    bgImage = "";
+    try { localStorage.removeItem(BG_IMAGE_KEY); } catch (e) {}
+    applyCustomTheme(); syncCustomInputs();
+  });
+  bgOpacityInput.addEventListener("input", () => {
+    bgOpacity = parseInt(bgOpacityInput.value, 10);
+    bgOpacityVal.textContent = bgOpacity + "%";
+    bgLayer.style.opacity = String(bgOpacity / 100);
+    try { localStorage.setItem(BG_OPACITY_KEY, String(bgOpacity)); } catch (e) {}
+  });
+
+  applyCustomTheme();
+  syncCustomInputs();
+
+  // Called by the native wrapper on quit to flush the very latest state to disk
+  window.__sweckbanCurrentState = () => JSON.stringify(state, null, 2);
+
+  // Called by the native wrapper after the user picks a new data folder
+  window.__sweckbanRelocated = (path, contents) => {
+    window.__SWECKBAN_DATA_PATH = path;
+    setStatus(`Native app — saving to ${path}`, true);
+    if (contents) window.__sweckbanApplyExternal(contents);
+  };
+
+  // Called by the native wrapper when iCloud syncs in a newer data file
+  window.__sweckbanApplyExternal = (json) => {
+    try {
+      const parsed = JSON.parse(json);
+      if (!parsed || !Array.isArray(parsed.boards) || !parsed.boards.length) return;
+      // A newer file replaced our state — any open editor still points at the OLD
+      // objects, so close it (and cancel a drag) before swapping to avoid a save that
+      // silently writes into a detached card/task.
+      const hadEditorOpen = overlay.classList.contains("open") || taskOverlay.classList.contains("open");
+      closeModal(); closeTaskModal(); closeArchive();
+      document.body.classList.remove("pl-dragging");
+      state = parsed;
+      if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+      resetUndoBaseline();
+      renderAll();
+      if (hadEditorOpen) alert("Sweckban loaded newer data synced from another device, so the editor you had open was closed. Re-open the card or task to make your change again.");
+    } catch (e) { /* ignore malformed external data */ }
+  };
+
+  // ---------- Collapsible People section ----------
+  const PEOPLE_COLLAPSED_KEY = "sweckban.peopleCollapsed";
+  const peopleGroup = document.getElementById("peopleGroup");
+  const peopleToggle = document.getElementById("peopleToggle");
+  function setPeopleCollapsed(collapsed) {
+    peopleGroup.classList.toggle("collapsed", collapsed);
+    peopleToggle.setAttribute("aria-expanded", String(!collapsed));
+    try { localStorage.setItem(PEOPLE_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+  }
+  let peopleCollapsed = false;
+  try { peopleCollapsed = localStorage.getItem(PEOPLE_COLLAPSED_KEY) === "1"; } catch (e) {}
+  setPeopleCollapsed(peopleCollapsed);
+  peopleToggle.addEventListener("click", () => setPeopleCollapsed(!peopleGroup.classList.contains("collapsed")));
+
+  const BOARDS_COLLAPSED_KEY = "sweckban.boardsCollapsed";
+  const boardsGroup = document.getElementById("boardsGroup");
+  const boardsToggle = document.getElementById("boardsToggle");
+  function setBoardsCollapsed(collapsed) {
+    boardsGroup.classList.toggle("collapsed", collapsed);
+    boardsToggle.setAttribute("aria-expanded", String(!collapsed));
+    try { localStorage.setItem(BOARDS_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+  }
+  let boardsCollapsed = false;
+  try { boardsCollapsed = localStorage.getItem(BOARDS_COLLAPSED_KEY) === "1"; } catch (e) {}
+  setBoardsCollapsed(boardsCollapsed);
+  boardsToggle.addEventListener("click", () => setBoardsCollapsed(!boardsGroup.classList.contains("collapsed")));
+
+  const DEPTS_COLLAPSED_KEY = "sweckban.deptsCollapsed";
+  const departmentsGroup = document.getElementById("departmentsGroup");
+  const departmentsToggle = document.getElementById("departmentsToggle");
+  function setDeptsCollapsed(collapsed) {
+    departmentsGroup.classList.toggle("collapsed", collapsed);
+    departmentsToggle.setAttribute("aria-expanded", String(!collapsed));
+    try { localStorage.setItem(DEPTS_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+  }
+  let deptsCollapsed = false;
+  try { deptsCollapsed = localStorage.getItem(DEPTS_COLLAPSED_KEY) === "1"; } catch (e) {}
+  setDeptsCollapsed(deptsCollapsed);
+  departmentsToggle.addEventListener("click", () => setDeptsCollapsed(!departmentsGroup.classList.contains("collapsed")));
+
+  // ---------- Collapsible sidebar (whole left panel; device-local) ----------
+  const SIDEBAR_COLLAPSED_KEY = "sweckban.sidebarCollapsed";
+  const layoutEl = document.querySelector(".layout");
+  const sidebarToggle = document.getElementById("sidebarToggle");
+  function setSidebarCollapsed(collapsed) {
+    layoutEl.classList.toggle("sidebar-collapsed", collapsed);
+    sidebarToggle.setAttribute("aria-pressed", String(collapsed));
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    requestAnimationFrame(updateScrollFades); // board width changed
+  }
+  let sidebarCollapsed = false;
+  try { sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"; } catch (e) {}
+  setSidebarCollapsed(sidebarCollapsed);
+  sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!layoutEl.classList.contains("sidebar-collapsed")));
+
+  // ---------- Archive drawer ----------
+  const archiveBtn = document.getElementById("archiveBtn");
+  const archiveCountEl = document.getElementById("archiveCount");
+  const archiveOverlay = document.getElementById("archiveOverlay");
+  const archiveListEl = document.getElementById("archiveList");
+
+  function archivedCards() {
+    const board = activeBoard();
+    const out = [];
+    if (board && board.lists) board.lists.forEach(l => l.cards.forEach(c => { if (c.archived) out.push({ list: l, card: c }); }));
+    return out;
+  }
+  function updateArchiveButton() {
+    const n = archivedCards().length;
+    archiveBtn.hidden = n === 0;
+    archiveCountEl.textContent = n;
+    if (n === 0) archiveOverlay.classList.remove("open");
+  }
+  function renderArchive() {
+    const items = archivedCards();
+    archiveListEl.innerHTML = "";
+    if (!items.length) {
+      const e = document.createElement("div");
+      e.className = "archive-empty";
+      e.textContent = "No archived cards.";
+      archiveListEl.appendChild(e);
+      return;
+    }
+    items.forEach(({ list, card }) => {
+      const row = document.createElement("div");
+      row.className = "archive-row";
+
+      const info = document.createElement("div");
+      info.className = "archive-info";
+      const t = document.createElement("div");
+      t.className = "archive-card-title";
+      t.textContent = card.title;
+      const meta = document.createElement("div");
+      meta.className = "archive-card-list";
+      meta.textContent = "in " + list.name;
+      info.append(t, meta);
+
+      const actions = document.createElement("div");
+      actions.className = "archive-actions";
+      const restore = document.createElement("button");
+      restore.className = "btn subtle";
+      restore.textContent = "Restore";
+      restore.addEventListener("click", () => {
+        card.archived = false;
+        save(); renderAll(); renderArchive();
+      });
+      const del = document.createElement("button");
+      del.className = "btn subtle";
+      del.textContent = "Delete";
+      del.title = "Delete permanently";
+      del.addEventListener("click", () => {
+        if (!confirm(`Permanently delete "${card.title}"? This can't be undone from the archive.`)) return;
+        list.cards = list.cards.filter(c => c.id !== card.id);
+        save(); renderAll(); renderArchive();
+      });
+      actions.append(restore, del);
+
+      row.append(info, actions);
+      archiveListEl.appendChild(row);
+    });
+  }
+  function openArchive() { renderArchive(); archiveOverlay.classList.add("open"); }
+  function closeArchive() { archiveOverlay.classList.remove("open"); }
+  archiveBtn.addEventListener("click", openArchive);
+  document.getElementById("archiveDone").addEventListener("click", closeArchive);
+  archiveOverlay.addEventListener("click", e => { if (e.target === archiveOverlay) closeArchive(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && archiveOverlay.classList.contains("open")) closeArchive();
+  });
+
+  // ---------- Settings sheet ----------
+  const settingsOverlay = document.getElementById("settingsOverlay");
+  function openSettings() { syncCustomInputs(); settingsOverlay.classList.add("open"); }
+  function closeSettings() { settingsOverlay.classList.remove("open"); }
+  document.getElementById("settingsBtn").addEventListener("click", openSettings);
+  document.getElementById("settingsDone").addEventListener("click", closeSettings);
+  settingsOverlay.addEventListener("click", e => { if (e.target === settingsOverlay) closeSettings(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && settingsOverlay.classList.contains("open")) closeSettings();
+    if ((e.metaKey || e.ctrlKey) && e.key === ",") { e.preventDefault(); openSettings(); }
+  });
+
+  // ---------- Card search (Cmd+F) ----------
+  const searchInput = document.getElementById("searchInput");
+  searchInput.addEventListener("input", () => {
+    searchQuery = searchInput.value.trim().toLowerCase();
+    renderBoard();
+  });
+  searchInput.addEventListener("keydown", e => {
+    if (e.key === "Escape") { searchInput.value = ""; searchQuery = ""; searchInput.blur(); renderBoard(); e.stopPropagation(); }
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault(); searchInput.focus(); searchInput.select();
+    }
+  });
+
+  // ---------- Undo / redo keybindings (Cmd+Z / Shift+Cmd+Z) ----------
+  document.addEventListener("keydown", e => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+    const t = e.target;
+    // While typing, let the native text-field undo handle it, not the board
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    // Don't hijack undo while a modal / settings sheet is open
+    if (document.querySelector(".overlay.open")) return;
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+  });
+
+  // Let the native menu bar (Phase 5) drive board-level undo/redo
+  window.__sweckbanUndo = undo;
+  window.__sweckbanRedo = redo;
+
+  // ---------- Native menu bridge + Dock badge (Phase 5) ----------
+  function switchBoard(dir) {
+    const i = state.boards.findIndex(b => b.id === state.activeBoard);
+    if (i < 0 || state.boards.length < 2) return;
+    const n = (i + dir + state.boards.length) % state.boards.length;
+    state.activeBoard = state.boards[n].id;
+    save(); renderAll();
+  }
+  window.__sweckbanMenu = (action) => {
+    switch (action) {
+      case "settings":       openSettings(); break;
+      case "newBoard":       { const k = document.querySelector('#boardTypeSeg .seg-btn[data-type="kanban"]'); if (k) k.click(); document.getElementById("newBoardName").focus(); break; }
+      case "newPlanner":     { const p = document.querySelector('#boardTypeSeg .seg-btn[data-type="planner"]'); if (p) p.click(); document.getElementById("newBoardName").focus(); break; }
+      case "newCard":        { const inp = boardEl.querySelector(".add-card-input"); if (inp) inp.focus(); break; }
+      case "export":         document.getElementById("exportBtn").click(); break;
+      case "import":         document.getElementById("importBtn").click(); break;
+      case "archive":        if (!archiveBtn.hidden) openArchive(); break;
+      case "toggleTheme":    themeBtn.click(); break;
+      case "toggleSidebar":  sidebarToggle.click(); break;
+      case "togglePeople":   peopleToggle.click(); break;
+      case "toggleFitWidth": fitWidthToggle.checked = !fitWidthToggle.checked; fitWidthToggle.dispatchEvent(new Event("change")); break;
+      case "nextBoard":      switchBoard(1); break;
+      case "prevBoard":      switchBoard(-1); break;
+    }
+  };
+
+  // Dock badge: non-archived cards due today or overdue, across all boards
+  function dueBadgeCount() {
+    const today = new Date(); today.setHours(23, 59, 59, 999);
+    let n = 0;
+    state.boards.forEach(b => (b.lists || []).forEach(l => l.cards.forEach(c => {
+      if (c.archived || !c.due) return;
+      if (new Date(c.due + "T23:59:59") <= today) n++;
+    })));
+    return n;
+  }
+  function updateDockBadge() {
+    if (NATIVE) nativePost({ cmd: "badge", count: dueBadgeCount() });
+  }
+
+  renderAll();
+  initSaveFile();
+})();
+</script>
+</body>
+</html>

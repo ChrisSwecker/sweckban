@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Build output
+*.app/
+icon.iconset/
+
+# Working backups of the UI file
+*.bak
+
+# Board data never belongs in the repo — it lives in ~/Desktop/Sweckban by
+# default, but ignore it here too in case someone points DATA_DIR at the
+# source folder.
+sweckban-data.json
+backups/
