@@ -190,21 +190,21 @@ easier to test on the Mac where everything already works. Each is small. Build w
 run `node tests/merge.test.js`. Re-run `./notarize.sh` before handing the Mac build to
 anyone.
 
-- [ ] **Platform flag.** Shell injects `window.__SWECKBAN_PLATFORM = "macos" | "ios"`. In
+- [x] **Platform flag.** Shell injects `window.__SWECKBAN_PLATFORM = "macos" | "ios"`. In
       `initSaveFile()`'s native branch, show the *Reveal* and *Change Location* buttons only
       on macOS; on iOS show a one-line note ("Synced through iCloud") instead. Nothing else
       should branch on platform unless it must.
-- [ ] **Move `activeBoard` out of the synced file.** It's device-local UI state; today it's
+- [x] **Move `activeBoard` out of the synced file.** It's device-local UI state; today it's
       in the JSON, so switching boards on one device can nudge another. Keep it in
       `localStorage` (key `sweckban.activeBoard`), fall back to the first board, and stop
       writing it to disk. `normalize()` should tolerate a file that still has it.
       Update `sameData()`'s exclusion and the tests accordingly.
-- [ ] **Export via the bridge.** Export currently builds a Blob and clicks an `<a download>`
+- [x] **Export via the bridge.** Export currently builds a Blob and clicks an `<a download>`
       (`exportBtn` handler) — that does nothing in an iOS `WKWebView`. Add a native cmd
       `{cmd:'export', name, data}`; when `NATIVE`, post it instead of the anchor trick. Mac:
       `NSSavePanel`. iOS (Phase 1): share sheet / Files export. Import already works —
       `<input type=file>` is native on iOS with no delegate needed.
-- [ ] **NSFileVersion conflicts.** iCloud Documents creates *conflict versions* when two
+- [x] **NSFileVersion conflicts.** iCloud Documents creates *conflict versions* when two
       devices write the same file while offline (`NSFileVersion.unresolvedConflictVersionsOfItem(at:)`).
       Nobody handles them yet, on either platform. Add to the Mac shell, in the same file
       as the watcher: on launch and on every `presentedItemDidChange`, enumerate unresolved
@@ -214,7 +214,7 @@ anyone.
       Test on the Mac by creating a conflict deliberately (write the file from a second
       process while iCloud is paused, or use two Macs). This is the one piece of Phase 0
       that is genuinely tricky; it is also the one that will bite first with a phone.
-- [ ] **Pointer-event card drag (groundwork).** Cards and list headers use HTML5
+- [x] **Pointer-event card drag (groundwork).** Cards and list headers use HTML5
       drag-and-drop (`draggable = true`, `dragstart/dragover/drop` in `renderList`/`renderCard`).
       That works on iPad Safari but not iPhone, and feels wrong on touch anyway. The
       planner bar drag was already converted to pointer events (`attachBarDrag`,
