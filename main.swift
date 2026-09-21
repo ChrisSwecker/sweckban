@@ -55,6 +55,85 @@ func jsString(_ s: String) -> String {
     return str
 }
 
+// ============================================================
+// Coordinated file access
+// ============================================================
+// Every read and write goes through NSFileCoordinator. The data file is already an iCloud
+// item for anyone using Desktop & Documents sync, and will be one in the app's container
+// later, so the sync daemon may be replacing it at any moment. Coordination is what stops
+// us reading a half-written file or writing over one that just landed — and it is
+// mandatory for anything inside a ubiquity container.
+
+final class DataFileWatcher: NSObject, NSFilePresenter {
+    static let shared = DataFileWatcher()
+    var onChange: (() -> Void)?
+
+    private var url = URL(fileURLWithPath: DATA_FILE)
+    private let queue: OperationQueue = {
+        let q = OperationQueue(); q.maxConcurrentOperationCount = 1; return q
+    }()
+
+    var presentedItemURL: URL? { url }
+    var presentedItemOperationQueue: OperationQueue { queue }
+
+    // start() re-reads DATA_FILE so relocating is just stop-then-start.
+    func start() {
+        url = URL(fileURLWithPath: DATA_FILE)
+        NSFileCoordinator.addFilePresenter(self)
+    }
+    func stop() { NSFileCoordinator.removeFilePresenter(self) }
+    func relocate() { stop(); start() }
+
+    // Someone else wrote the file: a change arriving from another Mac, or a hand edit.
+    // Our own writes pass this presenter to the coordinator, so they don't come back here.
+    func presentedItemDidChange() { DispatchQueue.main.async { self.onChange?() } }
+    func presentedSubitemDidChange(at url: URL) { presentedItemDidChange() }
+}
+
+func coordinatedRead(_ path: String) -> String? {
+    var text: String?
+    var coordError: NSError?
+    NSFileCoordinator(filePresenter: DataFileWatcher.shared)
+        .coordinate(readingItemAt: URL(fileURLWithPath: path), options: [], error: &coordError) { url in
+            text = try? String(contentsOf: url, encoding: .utf8)
+        }
+    return text
+}
+
+func coordinatedWrite(_ text: String, to path: String) throws {
+    var writeError: Error?
+    var coordError: NSError?
+    NSFileCoordinator(filePresenter: DataFileWatcher.shared)
+        .coordinate(writingItemAt: URL(fileURLWithPath: path),
+                    options: .forReplacing, error: &coordError) { url in
+            do { try text.write(to: url, atomically: true, encoding: .utf8) }
+            catch { writeError = error }
+        }
+    if let e = writeError { throw e }
+    if let e = coordError { throw e }
+}
+
+// An iCloud file that hasn't been downloaded yet reads as nil, which is indistinguishable
+// from a corrupt file — and we now refuse to boot on an unreadable file, so ask for it and
+// wait briefly. Already-present files return immediately, so this is free in the normal case.
+func ensureDownloaded(_ path: String) {
+    let url = URL(fileURLWithPath: path)
+    let fm = FileManager.default
+    guard fm.isUbiquitousItem(at: url) else { return }
+    let keys: Set<URLResourceKey> = [.ubiquitousItemDownloadingStatusKey]
+    func current() -> Bool {
+        (try? url.resourceValues(forKeys: keys))?.ubiquitousItemDownloadingStatus == .current
+    }
+    if current() { return }
+    try? fm.startDownloadingUbiquitousItem(at: url)
+    let deadline = Date().addingTimeInterval(8)
+    while Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        if current() { return }
+    }
+    NSLog("Sweckban: timed out waiting for iCloud to download %@", path)
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!
     var webView: WKWebView!
@@ -62,6 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
     var lastMod: Date = .distantPast
     var saveErrorShown = false   // one-shot guard so a failing disk doesn't spam alerts
     var bridgeLogged = false
+    var lastWrittenJSON = ""     // what we last put on disk, so a sync-in is distinguishable from our own write
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         try? FileManager.default.createDirectory(atPath: DATA_DIR, withIntermediateDirectories: true)
@@ -75,14 +155,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
 
         resolveMissingDataFile()
 
+        // Watch the data file so a change synced from another device applies as it lands,
+        // rather than waiting for the window to be focused.
+        DataFileWatcher.shared.onChange = { [weak self] in self?.syncFromDisk() }
+        DataFileWatcher.shared.start()
+
         let config = WKWebViewConfiguration()
         let ucc = config.userContentController
         ucc.add(self, name: "sweckban")
 
         // Inject native flag, data path, and current file contents before the page runs
         var boot = "window.__SWECKBAN_NATIVE = true; window.__SWECKBAN_DATA_PATH = \(jsString(DATA_FILE));"
-        let contents = try? String(contentsOfFile: DATA_FILE, encoding: .utf8)
+        ensureDownloaded(DATA_FILE)
+        let contents = coordinatedRead(DATA_FILE)
         if let contents = contents, !contents.isEmpty {
+            lastWrittenJSON = contents
             boot += "window.__SWECKBAN_BOOT_DATA = \(jsString(contents));"
         } else if contents == nil, FileManager.default.fileExists(atPath: DATA_FILE) {
             // The file is there but we couldn't read it (permissions, a denied Desktop/
@@ -191,7 +278,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
     func writeData(_ data: String) -> Bool {
         maybeBackup()
         do {
-            try data.write(toFile: DATA_FILE, atomically: true, encoding: .utf8)
+            try coordinatedWrite(data, to: DATA_FILE)
+            lastWrittenJSON = data
             updateLastMod()
             saveErrorShown = false
             return true
@@ -244,17 +332,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         }
     }
 
-    // ---------- Pick up iCloud-synced changes on focus ----------
-    func applicationDidBecomeActive(_ notification: Notification) {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: DATA_FILE),
-              let mod = attrs[.modificationDate] as? Date, mod > lastMod,
-              let contents = try? String(contentsOfFile: DATA_FILE, encoding: .utf8),
-              !contents.isEmpty else { return }
-        lastMod = mod
+    // ---------- Pick up changes that arrived from another device ----------
+    // The file presenter reports these as they land; becoming active is the backstop,
+    // since a presenter isn't notified while the app is suspended.
+    func applicationDidBecomeActive(_ notification: Notification) { syncFromDisk() }
+
+    // Compare by content, not modification date: iCloud can restore a file with an older
+    // mtime, and comparing dates also can't tell our own write apart from a foreign one.
+    func syncFromDisk() {
+        guard let contents = coordinatedRead(DATA_FILE), !contents.isEmpty,
+              contents != lastWrittenJSON else { return }
+        lastWrittenJSON = contents
+        updateLastMod()
+        NSLog("Sweckban: applying external change from %@ (%d bytes)", DATA_FILE, contents.utf8.count)
         webView?.evaluateJavaScript(
             "window.__sweckbanApplyExternal && window.__sweckbanApplyExternal(\(jsString(contents)))",
             completionHandler: nil)
     }
+
 
     func changeLocation() {
         let panel = NSOpenPanel()
@@ -277,9 +372,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         DATA_DIR = url.path
         UserDefaults.standard.set(DATA_DIR, forKey: "dataDir")
         try? fm.createDirectory(atPath: BACKUP_DIR, withIntermediateDirectories: true)
+        DataFileWatcher.shared.relocate()
         updateLastMod()
 
-        let contents = (try? String(contentsOfFile: DATA_FILE, encoding: .utf8)) ?? ""
+        let contents = coordinatedRead(DATA_FILE) ?? ""
+        lastWrittenJSON = contents
         webView.evaluateJavaScript(
             "window.__sweckbanRelocated && window.__sweckbanRelocated(\(jsString(DATA_FILE)), \(jsString(contents)))",
             completionHandler: nil)
@@ -431,6 +528,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             if replied { return }
             replied = true
             if let json = json, !json.isEmpty { self.writeData(json) }
+            DataFileWatcher.shared.stop()
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { finish(nil) }
