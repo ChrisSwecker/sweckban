@@ -39,7 +39,7 @@ const planner = (id, name, tasks, ts) => ({ id, name, type: "planner", tasks, up
 const task = (id, title, ts) => ({ id, title, start: "2026-01-01", end: "2026-02-01", assignees: [], milestones: [], updatedAt: ts });
 const person = (id, name, ts) => ({ id, name, handle: name.toLowerCase(), color: "#FF4D00", updatedAt: ts });
 const state = (boards, extra) => Object.assign(
-  { schema: 2, activeBoard: boards[0] && boards[0].id, boards, people: [], departments: [], tombstones: {} },
+  { schema: 2, boards, people: [], departments: [], tombstones: {} },
   extra || {}
 );
 const ids = arr => arr.map(x => x.id);
@@ -196,11 +196,22 @@ test("nothing is silently dropped", () => {
   }));
 });
 
+// activeBoard moved to localStorage. A file written by an older build still carries the
+// key, so both of these guard the mixed-version case rather than anything current.
 test("the write-back check ignores which board is on screen", () => {
   const a = state([kanban("b1", "B", [], 100), kanban("b2", "B2", [], 100)]);
   const b = state([kanban("b1", "B", [], 100), kanban("b2", "B2", [], 100)]);
   b.activeBoard = "b2";
   ok(sameData(a, b), "a different open board should not count as a data change");
+});
+
+test("merging never puts the open board back into the file", () => {
+  const mine = state([kanban("b1", "B", [], 100)]);
+  const theirs = state([kanban("b1", "B", [], 100)]);
+  mine.activeBoard = "b1";      // as an older build would have written it
+  theirs.activeBoard = "b1";
+  ok(!("activeBoard" in mergeStates(mine, theirs)),
+     "activeBoard is device-local and must not survive a merge");
 });
 
 test("tie on updatedAt resolves the same way regardless of argument order", () => {
