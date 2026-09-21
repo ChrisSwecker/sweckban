@@ -13,6 +13,14 @@ swiftc -O main.swift -o "$APP/Contents/MacOS/Sweckban"
 cp sweckban.html "$APP/Contents/Resources/"
 cp Info.plist  "$APP/Contents/"
 
+# iCloud needs a provisioning profile embedded in the bundle — macOS won't honour the
+# com.apple.developer.icloud-* entitlements without one. Drop the .provisionprofile you
+# download from the developer portal next to this script as embedded.provisionprofile
+# and it gets picked up automatically; without it the app just uses a local folder.
+if [ -f embedded.provisionprofile ]; then
+  cp embedded.provisionprofile "$APP/Contents/embedded.provisionprofile"
+fi
+
 # Icon: vector art -> icon.icns. 16/32pt render from icon-small.svg, whose bars are
 # chunkier and further apart — the full art's bars land on ~2 device pixels there and
 # smear together. 128pt and up use icon.svg. Regenerate both with `node make-icon.js`.
@@ -65,9 +73,14 @@ if [ -n "$SIGN_ID" ] && [ "$SIGN_ID" != "-" ]; then
   # and its file provider re-attaches com.apple.FinderInfo to the bundle root faster
   # than xattr can clear it — codesign then refuses to seal it ("detritus not allowed").
   # ditto --noextattr gives a clean tree to sign and verify; the result is copied back.
+  ENTITLEMENTS=()
+  if [ -f "$APP/Contents/embedded.provisionprofile" ] && [ -f Sweckban.entitlements ]; then
+    ENTITLEMENTS=(--entitlements Sweckban.entitlements)
+    echo "  including iCloud entitlements (provisioning profile found)"
+  fi
   WORK="$(mktemp -d)"
   ditto --noextattr --norsrc "$APP" "$WORK/$APP"
-  codesign --force --timestamp --options runtime --sign "$SIGN_ID" "$WORK/$APP"
+  codesign --force --timestamp --options runtime "${ENTITLEMENTS[@]}" --sign "$SIGN_ID" "$WORK/$APP"
   codesign --verify --deep --strict "$WORK/$APP"
   rm -rf "$APP"
   ditto --noextattr --norsrc "$WORK/$APP" "$APP"

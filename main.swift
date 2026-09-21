@@ -56,6 +56,32 @@ func jsString(_ s: String) -> String {
 }
 
 // ============================================================
+// Where the data lives
+// ============================================================
+// Preference order:
+//   1. The app's own iCloud container — the only location an iOS/iPadOS build can also
+//      read, and one the user can't drag somewhere else by accident.
+//   2. A folder chosen with "Change Location…" (UserDefaults "dataDir").
+//   3. ~/Desktop/Sweckban.
+//
+// macOS grants the com.apple.developer.icloud-* entitlements only to a Developer ID app
+// carrying a matching provisioning profile. Until embedded.provisionprofile is in the
+// bundle we don't even ask for the container: asking is a blocking call that can take
+// seconds, and the answer would be nil anyway.
+let ICLOUD_CONTAINER_ID = "iCloud.com.swecker.sweckban"
+
+func iCloudDocumentsDir() -> String? {
+    guard UserDefaults.standard.object(forKey: "useICloud") as? Bool ?? true else { return nil }
+    guard FileManager.default.fileExists(
+            atPath: Bundle.main.bundlePath + "/Contents/embedded.provisionprofile") else { return nil }
+    guard let container = FileManager.default
+            .url(forUbiquityContainerIdentifier: ICLOUD_CONTAINER_ID) else { return nil }
+    let docs = container.appendingPathComponent("Documents")
+    try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+    return docs.path
+}
+
+// ============================================================
 // Coordinated file access
 // ============================================================
 // Every read and write goes through NSFileCoordinator. The data file is already an iCloud
@@ -80,6 +106,7 @@ final class DataFileWatcher: NSObject, NSFilePresenter {
     func start() {
         url = URL(fileURLWithPath: DATA_FILE)
         NSFileCoordinator.addFilePresenter(self)
+        NSLog("Sweckban: watching %@", url.path)
     }
     func stop() { NSFileCoordinator.removeFilePresenter(self) }
     func relocate() { stop(); start() }
@@ -153,6 +180,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             try? FileManager.default.copyItem(atPath: oldFile, toPath: DATA_FILE)
         }
 
+        adoptICloudContainerIfAvailable()
         resolveMissingDataFile()
 
         // Watch the data file so a change synced from another device applies as it lands,
@@ -340,6 +368,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
     // Compare by content, not modification date: iCloud can restore a file with an older
     // mtime, and comparing dates also can't tell our own write apart from a foreign one.
     func syncFromDisk() {
+        // applicationDidBecomeActive can fire while a startup alert is spinning the run
+        // loop, before the web view exists. Without this guard the change is recorded as
+        // seen and then applied to nothing.
+        guard webView != nil else { return }
         guard let contents = coordinatedRead(DATA_FILE), !contents.isEmpty,
               contents != lastWrittenJSON else { return }
         lastWrittenJSON = contents
@@ -350,6 +382,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             completionHandler: nil)
     }
 
+    // Adopt the app's iCloud container once it becomes reachable (i.e. once the
+    // provisioning profile is in place). Copies rather than moves, and adopts a file
+    // already in the container rather than overwriting it — the same rule as Change Location.
+    func adoptICloudContainerIfAvailable() {
+        guard let docs = iCloudDocumentsDir(), docs != DATA_DIR else { return }
+        let fm = FileManager.default
+        let containerFile = docs + "/sweckban-data.json"
+
+        if !fm.fileExists(atPath: containerFile), fm.fileExists(atPath: DATA_FILE) {
+            let a = NSAlert()
+            a.messageText = "Move Sweckban's data to iCloud?"
+            a.informativeText = "Your boards would move into Sweckban's own iCloud storage, so they "
+                + "sync to your other devices automatically and can't be moved by accident.\n\n"
+                + "The current file at\n\(DATA_FILE)\nis left where it is as a backup."
+            a.addButton(withTitle: "Move to iCloud")
+            // Labelled for what it actually does: declining is remembered, so the app
+            // won't re-ask on every launch. Change Location… re-opens the choice.
+            a.addButton(withTitle: "Keep Using This Folder")
+            guard a.runModal() == .alertFirstButtonReturn else {
+                UserDefaults.standard.set(false, forKey: "useICloud")
+                return
+            }
+            guard let text = coordinatedRead(DATA_FILE),
+                  (try? coordinatedWrite(text, to: containerFile)) != nil else {
+                NSLog("Sweckban: couldn't copy data into the iCloud container; staying local")
+                return
+            }
+        }
+        guard fm.fileExists(atPath: containerFile) else { return }
+        DATA_DIR = docs
+        UserDefaults.standard.set(true, forKey: "useICloud")
+        NSLog("Sweckban: using iCloud container at %@", docs)
+    }
 
     func changeLocation() {
         let panel = NSOpenPanel()
@@ -371,6 +436,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         }
         DATA_DIR = url.path
         UserDefaults.standard.set(DATA_DIR, forKey: "dataDir")
+        // Picking a folder by hand opts out of the iCloud container, otherwise the next
+        // launch would quietly move back to it.
+        UserDefaults.standard.set(false, forKey: "useICloud")
         try? fm.createDirectory(atPath: BACKUP_DIR, withIntermediateDirectories: true)
         DataFileWatcher.shared.relocate()
         updateLastMod()

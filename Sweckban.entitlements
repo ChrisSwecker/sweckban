@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- iCloud Documents, for the app's own container. macOS only honours these when the
+       bundle carries a matching Developer ID provisioning profile, so build.sh applies
+       this file only when embedded.provisionprofile is present.
+
+       com.apple.application-identifier is REQUIRED and easy to miss: without it the
+       iCloud keys below are silently inert. The app still launches, but clouddocs logs
+       "bundle is lacking the 'com.apple.application-identifier' entitlement" and
+       url(forUbiquityContainerIdentifier:) returns nil instantly — which looks exactly
+       like a container that hasn't propagated yet. Verified: adding this one key is what
+       makes the container resolve. -->
+  <key>com.apple.application-identifier</key>
+  <string>2V6HCLJ5U4.com.swecker.sweckban</string>
+  <key>com.apple.developer.team-identifier</key>
+  <string>2V6HCLJ5U4</string>
+
+  <key>com.apple.developer.icloud-container-identifiers</key>
+  <array><string>iCloud.com.swecker.sweckban</string></array>
+  <key>com.apple.developer.ubiquity-container-identifiers</key>
+  <array><string>iCloud.com.swecker.sweckban</string></array>
+  <key>com.apple.developer.icloud-services</key>
+  <array><string>CloudDocuments</string></array>
+</dict>
+</plist>
