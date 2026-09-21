@@ -55,11 +55,13 @@ func jsString(_ s: String) -> String {
     return str
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUIDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!
     var webView: WKWebView!
+    var appURL: URL?             // the bundled sweckban.html — the only page ever allowed
     var lastMod: Date = .distantPast
     var saveErrorShown = false   // one-shot guard so a failing disk doesn't spam alerts
+    var bridgeLogged = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         try? FileManager.default.createDirectory(atPath: DATA_DIR, withIntermediateDirectories: true)
@@ -71,19 +73,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             try? FileManager.default.copyItem(atPath: oldFile, toPath: DATA_FILE)
         }
 
+        resolveMissingDataFile()
+
         let config = WKWebViewConfiguration()
         let ucc = config.userContentController
         ucc.add(self, name: "sweckban")
 
         // Inject native flag, data path, and current file contents before the page runs
         var boot = "window.__SWECKBAN_NATIVE = true; window.__SWECKBAN_DATA_PATH = \(jsString(DATA_FILE));"
-        if let contents = try? String(contentsOfFile: DATA_FILE, encoding: .utf8), !contents.isEmpty {
+        let contents = try? String(contentsOfFile: DATA_FILE, encoding: .utf8)
+        if let contents = contents, !contents.isEmpty {
             boot += "window.__SWECKBAN_BOOT_DATA = \(jsString(contents));"
+        } else if contents == nil, FileManager.default.fileExists(atPath: DATA_FILE) {
+            // The file is there but we couldn't read it (permissions, a denied Desktop/
+            // iCloud access prompt, bad encoding). Booting with an empty board here would
+            // make the first save overwrite real data — so stop instead.
+            let a = NSAlert()
+            a.alertStyle = .critical
+            a.messageText = "Sweckban couldn't read its data file"
+            a.informativeText = "\(DATA_FILE)\n\nCheck that Sweckban is allowed to access this folder (System Settings ▸ Privacy & Security ▸ Files and Folders) and that the file is readable, then relaunch."
+            a.runModal()
+            exit(1)
         }
         ucc.addUserScript(WKUserScript(source: boot, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         webView = WKWebView(frame: .zero, configuration: config)
         webView.uiDelegate = self
+        webView.navigationDelegate = self
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
@@ -97,10 +113,76 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         window.makeKeyAndOrderFront(nil)
 
         if let url = Bundle.main.url(forResource: "sweckban", withExtension: "html") {
+            appURL = url
             webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
         updateLastMod()
         buildMenu()
+        UserDefaults.standard.set(true, forKey: "hasLaunched")
+    }
+
+    // The data file isn't where we expect it — folder moved, renamed, or deleted. On a
+    // fresh install that's normal; otherwise ask, rather than silently starting over with
+    // an empty board that then becomes "the" data file.
+    func resolveMissingDataFile() {
+        let fm = FileManager.default
+        guard UserDefaults.standard.bool(forKey: "hasLaunched") else { return }
+        let originalDir = DATA_DIR
+        while !fm.fileExists(atPath: DATA_FILE) {
+            let a = NSAlert()
+            a.alertStyle = .warning
+            a.messageText = "Sweckban can't find its data file"
+            a.informativeText = "Expected it at:\n\(DATA_FILE)\n\n"
+                + "If you moved or renamed the Sweckban folder, choose it and Sweckban will keep using it there. "
+                + "Starting fresh creates an empty board at the location above."
+            a.addButton(withTitle: "Locate Folder…")
+            a.addButton(withTitle: "Start Fresh")
+            a.addButton(withTitle: "Quit")
+            switch a.runModal() {
+            case .alertFirstButtonReturn:
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true
+                panel.canChooseFiles = false
+                panel.prompt = "Use Folder"
+                panel.message = "Choose the folder that contains sweckban-data.json"
+                guard panel.runModal() == .OK, let url = panel.url else { continue }
+                if fm.fileExists(atPath: url.path + "/sweckban-data.json") {
+                    DATA_DIR = url.path
+                    UserDefaults.standard.set(DATA_DIR, forKey: "dataDir")
+                    // Drop the empty folder we just created at the old location
+                    if let left = try? fm.contentsOfDirectory(atPath: originalDir), left.isEmpty {
+                        try? fm.removeItem(atPath: originalDir)
+                    }
+                } else {
+                    let b = NSAlert()
+                    b.messageText = "No sweckban-data.json in that folder"
+                    b.informativeText = "Pick the folder that has the data file directly inside it."
+                    b.runModal()
+                }
+            case .alertSecondButtonReturn:
+                return
+            default:
+                exit(0)
+            }
+        }
+    }
+
+    // ---------- Navigation lockdown ----------
+    // Only the bundled page may ever be shown. Left alone, WKWebView navigates to any file
+    // or link dropped on the window — and that page would inherit the `sweckban` message
+    // handler, i.e. the ability to overwrite the data file. Web links go to the browser.
+    func isAppPage(_ url: URL?) -> Bool {
+        guard let url = url, let app = appURL, url.isFileURL else { return false }
+        return url.standardizedFileURL.path == app.standardizedFileURL.path
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        let url = navigationAction.request.url
+        if isAppPage(url) { decisionHandler(.allow); return }
+        if let url = url, ["http", "https"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
+        NSLog("Sweckban: blocked navigation to %@", url?.absoluteString ?? "(nil)")
+        decisionHandler(.cancel)
     }
 
     // Write the data file (atomic), backing up first. Surfaces a one-time alert if the
@@ -114,6 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             saveErrorShown = false
             return true
         } catch {
+            NSLog("Sweckban: write to %@ failed: %@", DATA_FILE, String(describing: error))
             if !saveErrorShown {
                 saveErrorShown = true
                 let a = NSAlert()
@@ -130,8 +213,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
 
     // ---------- JS -> native ----------
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "sweckban",
-              let body = message.body as? [String: Any],
+        guard message.name == "sweckban" else { return }
+        // Accept messages only from our own page in the main frame (see isAppPage).
+        guard message.frameInfo.isMainFrame, isAppPage(message.frameInfo.request.url) else {
+            NSLog("Sweckban: ignored bridge message from %@", message.frameInfo.request.url?.absoluteString ?? "(nil)")
+            return
+        }
+        if !bridgeLogged {
+            bridgeLogged = true
+            NSLog("Sweckban: bridge accepting messages from %@", message.frameInfo.request.url?.path ?? "?")
+        }
+        guard let body = message.body as? [String: Any],
               let cmd = body["cmd"] as? String else { return }
         switch cmd {
         case "save":

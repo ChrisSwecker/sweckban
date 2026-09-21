@@ -415,7 +415,7 @@
   .pl-bar {
     position: absolute; top: 22px; height: 22px; border-radius: 5px; cursor: grab;
     display: flex; align-items: center; overflow: hidden; box-shadow: var(--shadow-card); min-width: 4px;
-    user-select: none;
+    user-select: none; touch-action: none;  /* bar drag owns the touch, not page scroll */
   }
   .pl-bar:hover { filter: brightness(1.08); }
   .pl-bar-label { font-size: 11px; color: #fff; padding: 0 9px; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,0.35); pointer-events: none; }
@@ -991,7 +991,29 @@
   const STORE_KEY = "sweckban.v1";
   const LABEL_COLORS = ["#FF4D00", "#4DA3FF", "#3FBF6F", "#FFC24D", "#B36BFF", "#FF5C7A"];
 
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  // On-disk schema. Bump when the file shape changes in a way older builds would mangle;
+  // a file with a higher number than this opens read-only (see schemaProblem).
+  //   1: original (implicit — files without a schema field)
+  //   2: updatedAt on every entity + tombstones map (multi-device merge groundwork)
+  const SCHEMA = 2;
+  const TOMBSTONE_TTL = 90 * 24 * 60 * 60 * 1000;  // forget deletes older than this
+  let readOnlyReason = "";  // non-empty ⇒ never write (newer schema / unreadable file)
+
+  // Ids are minted on whichever device makes the edit, so they need real entropy, not
+  // just a millisecond clock plus a few Math.random digits.
+  const uid = () => {
+    let r;
+    try { const a = new Uint32Array(2); crypto.getRandomValues(a); r = a[0].toString(36) + a[1].toString(36); }
+    catch (e) { r = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
+    return Date.now().toString(36) + r.slice(0, 12);
+  };
+
+  function schemaProblem(parsed) {
+    const v = Number(parsed && parsed.schema) || 1;
+    return v > SCHEMA
+      ? `This data was saved by a newer version of Sweckban (schema ${v}; this app reads up to ${SCHEMA}). It's open read-only so nothing gets lost — update the app to edit it.`
+      : "";
+  }
 
   // Native bridge: present when running inside the Sweckban.app WKWebView wrapper
   const NATIVE = !!(window.__SWECKBAN_NATIVE && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sweckban);
@@ -1001,18 +1023,29 @@
   let state = load();
 
   function load() {
-    // In the native app, the wrapper injects the data file's contents at boot
-    if (NATIVE && window.__SWECKBAN_BOOT_DATA) {
+    if (NATIVE) {
+      // The wrapper injects the data file at boot and that file is the single source of
+      // truth — deliberately no localStorage fallback here: a stale mirror silently
+      // resurrecting old boards is worse than an empty one. A missing file was already
+      // handled natively (locate / start fresh / quit) before the page loaded.
+      const raw = window.__SWECKBAN_BOOT_DATA;
+      if (!raw) return seed();
       try {
-        const parsed = JSON.parse(window.__SWECKBAN_BOOT_DATA);
-        if (parsed && Array.isArray(parsed.boards) && parsed.boards.length) return parsed;
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.boards) && parsed.boards.length) {
+          readOnlyReason = schemaProblem(parsed);
+          return parsed;
+        }
       } catch (e) { /* fall through */ }
+      // Present but not valid Sweckban JSON: show an empty board but never write over it.
+      readOnlyReason = "The data file exists but isn't readable Sweckban JSON, so Sweckban opened read-only rather than overwrite it. Restore it from the backups folder next to it, then relaunch.";
+      return seed();
     }
     try {
       const raw = localStorage.getItem(STORE_KEY) || localStorage.getItem("swecko.v1");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.boards)) return parsed;
+        if (parsed && Array.isArray(parsed.boards)) { readOnlyReason = schemaProblem(parsed); return parsed; }
       }
     } catch (e) { /* fall through to seed */ }
     return seed();
@@ -1038,26 +1071,71 @@
   }
 
   let storageOk = true;
-  // Raw write: localStorage + native/file. No undo bookkeeping (used by undo/redo too).
+  let lastPersisted = "";  // last JSON handed to the native wrapper; quit-flush skips a rewrite if unchanged
+  // Raw write: native file, or localStorage + browser file. No undo bookkeeping (used by undo/redo too).
   function persistState() {
+    if (readOnlyReason) return;
+    if (NATIVE) {
+      // Native mode writes the file only — no localStorage mirror (see load()).
+      const json = JSON.stringify(state, null, 2);
+      lastPersisted = json;
+      nativePost({ cmd: "save", data: json });
+      return;
+    }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       storageOk = true;
     } catch (e) {
-      if (storageOk && !fileHandle && !NATIVE) {
+      if (storageOk && !fileHandle) {
         storageOk = false;
         alert("Sweckban couldn't write to localStorage in this browser context. Link a save file, or use Export JSON to keep your changes.");
       }
     }
-    if (NATIVE) nativePost({ cmd: "save", data: JSON.stringify(state, null, 2) });
-    else queueFileWrite();
+    queueFileWrite();
   }
+
+  // ---------- Change tracking (groundwork for multi-device merge) ----------
+  // Every entity (board, list, card, task, person, department) carries updatedAt, and a
+  // hard delete leaves a tombstone in state.tombstones {id: deletedAt}. Rather than touch
+  // every mutation site, save() diffs the entities against the last committed snapshot
+  // and stamps whatever changed. Containers are compared shallowly (own fields + child
+  // id order), so editing a card bumps the card, not its list or board.
+  const serEntity = o => JSON.stringify(o, (k, v) => k === "updatedAt" ? undefined : v);
+  function forEachEntity(s, fn) {
+    (s.people || []).forEach(p => fn(p, p));
+    (s.departments || []).forEach(d => fn(d, d));
+    (s.boards || []).forEach(b => {
+      fn(b, { ...b, lists: (b.lists || []).map(l => l.id), tasks: (b.tasks || []).map(t => t.id) });
+      (b.lists || []).forEach(l => {
+        fn(l, { ...l, cards: (l.cards || []).map(c => c.id) });
+        (l.cards || []).forEach(c => fn(c, c));
+      });
+      (b.tasks || []).forEach(t => fn(t, t));
+    });
+  }
+  function stampChanges(againstSnapshot) {
+    const prev = new Map();
+    forEachEntity(JSON.parse(againstSnapshot), (e, view) => { if (e.id) prev.set(e.id, serEntity(view)); });
+    const now = Date.now();
+    forEachEntity(state, (e, view) => {
+      if (e.id && (!e.updatedAt || prev.get(e.id) !== serEntity(view))) e.updatedAt = now;
+    });
+  }
+  function tomb(...ids) {
+    if (!state.tombstones || typeof state.tombstones !== "object") state.tombstones = {};
+    const now = Date.now();
+    ids.forEach(id => { if (id) state.tombstones[id] = now; });
+  }
+  // Tombstone a container and everything inside it
+  function tombList(l) { tomb(l.id, ...(l.cards || []).map(c => c.id)); }
+  function tombBoard(b) { tomb(b.id, ...(b.tasks || []).map(t => t.id)); (b.lists || []).forEach(tombList); }
 
   // ---------- Undo / redo (snapshot-based; every mutation funnels through save()) ----------
   const undoStack = [], redoStack = [];
   const UNDO_CAP = 50;
   let committed = JSON.stringify(state);
   function save() {
+    stampChanges(committed);
     const snap = JSON.stringify(state);
     if (snap !== committed) {
       undoStack.push(committed);
@@ -1073,19 +1151,25 @@
     committed = JSON.stringify(state);
     undoStack.length = 0; redoStack.length = 0;
   }
+  // Undo/redo re-stamp whatever they revert: to another device, a reverted card is an
+  // edit made now, not a return to an older timestamp a merge would then overrule.
   function undo() {
     if (!undoStack.length) return;
+    const before = committed;
     redoStack.push(committed);
     committed = undoStack.pop();
     state = JSON.parse(committed);
+    stampChanges(before);
     if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
     persistState(); renderAll();
   }
   function redo() {
     if (!redoStack.length) return;
+    const before = committed;
     undoStack.push(committed);
     committed = redoStack.pop();
     state = JSON.parse(committed);
+    stampChanges(before);
     if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
     persistState(); renderAll();
   }
@@ -1292,6 +1376,12 @@
   function personColor(handle) { const o = handleOwner(handle); return o ? o.color : null; }
 
   function normalize() {
+    state.schema = SCHEMA;
+    if (!state.tombstones || typeof state.tombstones !== "object") state.tombstones = {};
+    const now = Date.now();
+    for (const id in state.tombstones) if (now - state.tombstones[id] > TOMBSTONE_TTL) delete state.tombstones[id];
+    // Data from before change tracking: stamp everything with load time
+    forEachEntity(state, e => { if (e.id && !e.updatedAt) e.updatedAt = now; });
     if (!Array.isArray(state.people)) state.people = [];
     state.people.forEach((p, i) => {
       if (!validHex(p.color)) p.color = TAG_COLORS[i % TAG_COLORS.length];
@@ -1637,6 +1727,7 @@
       del.addEventListener("click", e => {
         e.stopPropagation();
         if (!confirm(`Remove ${p.name} (@${p.handle})? Existing @${p.handle} text stays in cards but stops being a tag.`)) return;
+        tomb(p.id);
         state.people = state.people.filter(x => x.id !== p.id);
         unassignPersonFromTasks(p.id);
         filterHandles.delete(p.handle.toLowerCase());
@@ -1815,8 +1906,9 @@
         e.stopPropagation();
         const what = isPlanner ? "all its tasks" : "all its cards";
         if (!confirm(`Delete board "${b.name}" and ${what}?`)) return;
+        tombBoard(b);
         state.boards = state.boards.filter(x => x.id !== b.id);
-        if (state.boards.length === 0) state = seed();
+        if (state.boards.length === 0) { const t = state.tombstones; state = seed(); state.tombstones = t; }
         else if (state.activeBoard === b.id) state.activeBoard = state.boards[0].id;
         save(); renderAll();
       });
@@ -1925,6 +2017,7 @@
     save(); renderAll();
   }
   function removeDepartment(id) {
+    tomb(id);
     state.departments = state.departments.filter(d => d.id !== id);
     // Drop this department from any task's assignees
     state.boards.forEach(b => (b.tasks || []).forEach(t => {
@@ -2118,10 +2211,12 @@
 
     // Drag a bar to move it (body) or resize it (edge handles); a click with no
     // movement opens the task modal. Commits new start/end on mouseup.
+    // Pointer events (not mouse events) so the same code drives touch/pen on iPad.
     function attachBarDrag(bar, task) {
-      bar.addEventListener("mousedown", e => {
-        if (e.button !== 0) return;
+      bar.addEventListener("pointerdown", e => {
+        if (e.button !== 0) return;  // touch and pen report button 0 too
         e.preventDefault();
+        const pid = e.pointerId;
         const t = e.target;
         const mode = (t.classList.contains("pl-bar-handle") && t.classList.contains("l")) ? "resize-l"
                    : (t.classList.contains("pl-bar-handle") && t.classList.contains("r")) ? "resize-r"
@@ -2131,6 +2226,7 @@
         let pend = null;
         document.body.classList.add("pl-dragging");
         const onMove = ev => {
+          if (ev.pointerId !== pid) return;
           const dd = Math.round((ev.clientX - startX) / pxPerDay);
           let s = new Date(origS), en = new Date(origE);
           if (mode === "move") { s.setDate(s.getDate() + dd); en.setDate(en.getDate() + dd); }
@@ -2141,16 +2237,20 @@
           pend = { s, en };
         };
         const onUp = ev => {
-          document.removeEventListener("mousemove", onMove);
-          document.removeEventListener("mouseup", onUp);
+          if (ev.pointerId !== pid) return;
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.removeEventListener("pointercancel", onUp);
           document.body.classList.remove("pl-dragging");
+          if (ev.type === "pointercancel") { renderAll(); return; }  // OS took the gesture: discard preview
           if (!pend || Math.abs(ev.clientX - startX) <= 3) { openTaskModal(board, task); return; }
           task.start = fmtDate(pend.s);
           task.end = fmtDate(pend.en);
           save(); renderAll();
         };
-        document.addEventListener("mousemove", onMove);
-        document.addEventListener("mouseup", onUp);
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
       });
     }
 
@@ -2435,6 +2535,7 @@
   document.getElementById("tDelete").addEventListener("click", () => {
     if (!taskRef || taskRef.isNew) return;
     if (!confirm(`Delete task "${taskRef.task.title}"?`)) return;
+    tomb(taskRef.task.id);
     taskRef.board.tasks = taskRef.board.tasks.filter(x => x.id !== taskRef.task.id);
     save(); closeTaskModal(); renderAll();
   });
@@ -2528,6 +2629,7 @@
     del.title = "Delete list";
     del.addEventListener("click", () => {
       if (list.cards.length && !confirm(`Delete list "${list.name}" and its ${list.cards.length} card(s)?`)) return;
+      tombList(list);
       board.lists = board.lists.filter(l => l.id !== list.id);
       save(); renderAll();
     });
@@ -2835,6 +2937,7 @@
       try {
         const parsed = JSON.parse(reader.result);
         if (!parsed || !Array.isArray(parsed.boards)) throw new Error("Not a Sweckban backup");
+        if (schemaProblem(parsed)) { alert("That backup was made by a newer version of Sweckban and can't be imported here. Update the app first."); return; }
         if (!confirm("Importing replaces all current boards. Continue?")) return;
         state = parsed;
         if (!state.boards.find(b => b.id === state.activeBoard)) {
@@ -3006,7 +3109,13 @@
   syncCustomInputs();
 
   // Called by the native wrapper on quit to flush the very latest state to disk
-  window.__sweckbanCurrentState = () => JSON.stringify(state, null, 2);
+  // Quit-flush: hand the wrapper the latest state, or "" when what's on disk is already
+  // current (a needless rewrite bumps the mtime and makes every other synced Mac reload).
+  window.__sweckbanCurrentState = () => {
+    if (readOnlyReason) return "";
+    const json = JSON.stringify(state, null, 2);
+    return json === lastPersisted ? "" : json;
+  };
 
   // Called by the native wrapper after the user picks a new data folder
   window.__sweckbanRelocated = (path, contents) => {
@@ -3027,11 +3136,13 @@
       closeModal(); closeTaskModal(); closeArchive();
       document.body.classList.remove("pl-dragging");
       state = parsed;
+      readOnlyReason = schemaProblem(parsed);
+      lastPersisted = json;  // this is what's on disk now
       if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
-      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
       resetUndoBaseline();
       renderAll();
-      if (hadEditorOpen) alert("Sweckban loaded newer data synced from another device, so the editor you had open was closed. Re-open the card or task to make your change again.");
+      if (readOnlyReason) alert(readOnlyReason);
+      else if (hadEditorOpen) alert("Sweckban loaded newer data synced from another device, so the editor you had open was closed. Re-open the card or task to make your change again.");
     } catch (e) { /* ignore malformed external data */ }
   };
 
@@ -3147,6 +3258,7 @@
       del.title = "Delete permanently";
       del.addEventListener("click", () => {
         if (!confirm(`Permanently delete "${card.title}"? This can't be undone from the archive.`)) return;
+        tomb(card.id);
         list.cards = list.cards.filter(c => c.id !== card.id);
         save(); renderAll(); renderArchive();
       });
@@ -3250,6 +3362,17 @@
 
   renderAll();
   initSaveFile();
+  if (!readOnlyReason) {
+    // normalize() may have migrated the data (schema, timestamps): write that once now so
+    // storage matches memory; otherwise just remember what's on disk so quit won't rewrite it.
+    const snap = JSON.stringify(state);
+    if (snap !== committed) { committed = snap; persistState(); }
+    else lastPersisted = JSON.stringify(state, null, 2);
+  }
+  if (readOnlyReason) {
+    setStatus("Read-only — " + readOnlyReason, false);
+    setTimeout(() => alert(readOnlyReason), 300);
+  }
 })();
 </script>
 </body>
