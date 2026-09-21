@@ -284,17 +284,26 @@ one real device):
 
 ### Phase 2 — Touch
 
-- [ ] Card and list drag on touch using the Phase 0 pointer-event implementation; on
+- [x] Card and list drag on touch using the Phase 0 pointer-event implementation; on
       iPhone, add a "Move to…" action in the card editor as the accessible alternative.
-- [ ] `:hover` audit — there are ~20 `:hover` rules; on touch they stick after a tap.
+- [x] `:hover` audit — there are ~20 `:hover` rules; on touch they stick after a tap.
       Wrap them in `@media (hover: hover)`.
-- [ ] Hit targets: cards, list headers, the `+ Add card` input, planner milestone diamonds
+- [x] Hit targets: cards, list headers, the `+ Add card` input, planner milestone diamonds
       and bar handles (currently 8px wide — too small for a finger; make the handle's
       touch area ≥ 24px while keeping its visual width).
-- [ ] Autocomplete popover for `@mentions` — check it doesn't get hidden behind the
+- [x] Autocomplete popover for `@mentions` — check it doesn't get hidden behind the
       on-screen keyboard; the `ac` module positions it under the input.
-- [ ] Long-press on a card opens the editor (tap already does); make sure the drag
-      threshold doesn't swallow taps on iPad.
+- [x] ~~Long-press on a card opens the editor~~ — **superseded.** Long press is what arms
+      the drag, so it can't also open the editor. Tap opens it, which it already did; the
+      hold only starts once the finger has been still, so taps aren't swallowed.
+
+**Status:** done and verified on the iPad simulator. A quick swipe still scrolls the
+column (it stands down the moment the finger moves past TOUCH_SLOP); a long press picks
+the card up; holding at an edge auto-scrolls — a card was dragged from index 1 to index 45
+of a 47-card column, far past anything visible when the drag began. The list picker moves
+a card with no gesture at all. Mouse drag re-verified in the browser, unchanged.
+`TOUCH_HOLD_MS` is 450 and wants tuning on real hardware — the simulator can't tell you
+whether a hold feels responsive or sluggish.
 
 ### Phase 3 — iPhone layout
 

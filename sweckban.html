@@ -135,7 +135,7 @@
     text-align: left; box-shadow: none;
     color: var(--dim);
   }
-  .pane-toggle:hover { color: var(--ink); }
+  @media (hover: hover) { .pane-toggle:hover { color: var(--ink); } }
   .pane-toggle .disclosure {
     color: var(--dim);
     transform: rotate(90deg);
@@ -152,7 +152,7 @@
     font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--dim);
     border-radius: 4px; transition: background-color .1s, color .1s;
   }
-  .seg-btn:hover { color: var(--ink); }
+  @media (hover: hover) { .seg-btn:hover { color: var(--ink); } }
   .seg-btn.on { background: var(--accent); color: #fff; }
 
   .board-list { display: flex; flex-direction: column; gap: 1px; }
@@ -168,7 +168,7 @@
     font-size: 13px;
     transition: background-color .1s;
   }
-  .board-item:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .board-item:hover { background: var(--surface-hover); } }
   .board-item.active { background: var(--accent); color: var(--accent-ink); }
   .board-item.active .count { color: rgba(255,255,255,0.75); }
   .board-item.active .del { color: rgba(255,255,255,0.75); }
@@ -178,10 +178,10 @@
     font-size: 15px; cursor: pointer;
     padding: 0 2px; line-height: 1;
   }
-  .board-item .del:hover { color: var(--ink); }
-  .board-item.active .del:hover { color: #fff; }
+  @media (hover: hover) { .board-item .del:hover { color: var(--ink); } }
+  @media (hover: hover) { .board-item.active .del:hover { color: #fff; } }
 
-  input[type="text"], textarea, input[type="date"] {
+  input[type="text"], textarea, input[type="date"], select {
     width: 100%;
     background: var(--surface);
     color: var(--ink);
@@ -193,11 +193,21 @@
     outline: none;
     transition: box-shadow .12s, border-color .12s;
   }
-  input[type="text"]:focus, textarea:focus, input[type="date"]:focus {
+  input[type="text"]:focus, textarea:focus, input[type="date"]:focus, select:focus {
     border-color: var(--accent);
     box-shadow: var(--focus-ring);
   }
   input[type="date"] { font-size: 13px; }
+  /* Native selects ignore the border-radius/background above unless appearance is reset,
+     and iOS renders its own chevron, so leave room for it. */
+  select {
+    -webkit-appearance: none; appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238b8b93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  @media (pointer: coarse) { select { padding-top: 11px; padding-bottom: 11px; } }
   textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
 
   .btn {
@@ -214,10 +224,10 @@
     box-shadow: var(--shadow-card);
     transition: background-color .1s, border-color .1s;
   }
-  .btn:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .btn:hover { background: var(--surface-hover); } }
   .btn:focus-visible { box-shadow: var(--focus-ring); }
   .btn:not(.subtle) { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn:not(.subtle):hover { filter: brightness(1.08); }
+  @media (hover: hover) { .btn:not(.subtle):hover { filter: brightness(1.08); } }
   .btn.subtle { color: var(--ink); }
   .btn.subtle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -240,7 +250,7 @@
     padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius-sm);
     cursor: pointer; font-size: 12.5px; transition: background-color .1s;
   }
-  .person-row:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .person-row:hover { background: var(--surface-hover); } }
   .person-row.filtering { background: var(--accent); color: var(--accent-ink); }
   .person-row .handle { font-size: 11px; color: var(--dim); }
   .person-row.filtering .handle { color: rgba(255,255,255,0.75); }
@@ -250,8 +260,8 @@
     background: none; border: none; color: var(--dim);
     font-size: 15px; cursor: pointer; padding: 0 2px; line-height: 1;
   }
-  .person-row .del:hover { color: var(--ink); }
-  .person-row.filtering .del:hover { color: #fff; }
+  @media (hover: hover) { .person-row .del:hover { color: var(--ink); } }
+  @media (hover: hover) { .person-row.filtering .del:hover { color: #fff; } }
   .people-hint { font-size: 10.5px; color: var(--dim); margin-top: 8px; line-height: 1.6; padding: 0 6px; }
   .pdot {
     width: 12px; height: 12px; border-radius: 50%;
@@ -263,7 +273,7 @@
     width: 22px; height: 22px; border-radius: 50%;
     border: 1px solid transparent; cursor: pointer; opacity: .85; padding: 0;
   }
-  .cp-swatch:hover { opacity: 1; }
+  @media (hover: hover) { .cp-swatch:hover { opacity: 1; } }
   .cp-swatch.on { border-color: var(--ink); opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
   .color-pop {
     position: fixed; z-index: 25; display: none;
@@ -380,7 +390,7 @@
   }
   .dept-name { color: var(--ink); }
   .dept-del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
-  .dept-del:hover { color: var(--ink); }
+  @media (hover: hover) { .dept-del:hover { color: var(--ink); } }
   .dept-add { display: inline-flex; align-items: center; gap: 4px; }
   .dept-add input { width: 130px; padding: 4px 8px; font-size: 12px; }
   .planner-grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
@@ -415,7 +425,7 @@
     background: var(--sidebar); border-right: 1px solid var(--hairline);
     display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 46px; cursor: pointer;
   }
-  .pl-name:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .pl-name:hover { background: var(--surface-hover); } }
   .pl-name-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
   .pl-name-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl-track { position: relative; flex: none; height: 46px; }
@@ -424,7 +434,7 @@
     display: flex; align-items: center; overflow: hidden; box-shadow: var(--shadow-card); min-width: 4px;
     user-select: none; touch-action: none;  /* bar drag owns the touch, not page scroll */
   }
-  .pl-bar:hover { filter: brightness(1.08); }
+  @media (hover: hover) { .pl-bar:hover { filter: brightness(1.08); } }
   .pl-bar-label { font-size: 11px; color: #fff; padding: 0 9px; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,0.35); pointer-events: none; }
   .pl-bar-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 2; }
   .pl-bar-handle.l { left: 0; }
@@ -501,7 +511,7 @@
     cursor: pointer; padding: 0; line-height: 1; flex: none;
     display: inline-flex; align-items: center;
   }
-  .list-collapse:hover { color: var(--ink); }
+  @media (hover: hover) { .list-collapse:hover { color: var(--ink); } }
   .list-collapse .chev { transition: transform .15s ease; }
   .list.collapsed .list-collapse .chev { transform: rotate(180deg); }
 
@@ -536,7 +546,7 @@
     background: none; border: none; color: var(--dim);
     font-size: 15px; cursor: pointer; line-height: 1;
   }
-  .list-del:hover { color: var(--ink); }
+  @media (hover: hover) { .list-del:hover { color: var(--ink); } }
 
   .cards {
     padding: 8px;
@@ -565,10 +575,14 @@
     box-shadow: var(--shadow-card);
     transition: box-shadow .12s, transform .12s;
   }
-  .card:hover { box-shadow: 0 0 0 1px var(--accent); }
+  @media (hover: hover) { .card:hover { box-shadow: 0 0 0 1px var(--accent); } }
   .card.dragging { opacity: 0.35; }
-  /* The pointer drag owns the gesture, so a drag across a card mustn't select its text. */
-  .card, .list-header { user-select: none; -webkit-user-select: none; }
+  /* The pointer drag owns the gesture, so a drag across a card mustn't select its text —
+     and on touch the long press that arms it must not raise the iOS callout menu. */
+  .card, .list-header {
+    user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   .card-title { font-size: 13px; line-height: 1.4; word-wrap: break-word; }
   .card-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .card-meta:empty { display: none; }
@@ -584,6 +598,29 @@
   .due.overdue { color: #fff; background: #FF453A; border-color: #FF453A; }
   .has-desc { font-size: 11px; color: var(--dim); }
   .drop-indicator { height: 2px; background: var(--accent); border-radius: 2px; }
+
+  /* ---------- Touch hit targets ----------
+     Fingers need ~44px; the mouse layout is deliberately tighter, so none of this applies
+     to a fine pointer. Where a control has to stay visually small (the planner's 8px bar
+     handles, the 12px milestone diamonds) the VISUAL size is kept and only the hit area
+     grows, via a transparent ::after — a pseudo-element never becomes the event target, so
+     the existing hit-testing in attachBarDrag still sees the handle itself. */
+  @media (pointer: coarse) {
+    .card { padding: 12px; }
+    .list-header { padding: 14px 12px; }
+    .add-card-input { padding: 11px 10px; }
+    .list-collapse, .list-del, .board-item .del, .person-row .del, .dept-del {
+      min-width: 32px; min-height: 32px;
+    }
+    .pl-bar-handle { width: 12px; }
+    .pl-bar-handle::after {
+      content: ""; position: absolute; top: -10px; bottom: -10px; left: -10px; right: -10px;
+    }
+    .pl-ms-diamond::after {
+      content: ""; position: absolute; top: -8px; bottom: -8px; left: -8px; right: -8px;
+    }
+    .pl-ms-diamond { position: relative; }
+  }
 
   .list-footer { padding: 8px; border-top: 1px solid var(--hairline); }
   .add-card-input { font-size: 12.5px; padding: 6px 9px; }
@@ -638,7 +675,7 @@
     opacity: 0.45;
     transition: opacity .12s;
   }
-  .label-swatch:hover { opacity: 0.8; }
+  @media (hover: hover) { .label-swatch:hover { opacity: 0.8; } }
   .label-swatch.on { opacity: 1; box-shadow: 0 0 0 2px var(--ink); }
   .two-col { display: flex; gap: 12px; }
   .two-col > .field { flex: 1; }
@@ -665,7 +702,7 @@
     display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; cursor: pointer;
     text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0; color: var(--ink);
   }
-  .assignee-row:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .assignee-row:hover { background: var(--surface-hover); } }
   .assignee-row input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: none; }
   .assignee-name { font-size: 13px; color: var(--ink); text-transform: none; letter-spacing: normal; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .modal-footer { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--hairline); padding-top: 14px; }
@@ -726,7 +763,7 @@
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); background-clip: padding-box; }
+  @media (hover: hover) { ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); background-clip: padding-box; } }
 
   @media (max-width: 860px) {
     .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -933,6 +970,10 @@
     <div class="field">
       <label for="mTitle">Title</label>
       <input type="text" id="mTitle" maxlength="200">
+    </div>
+    <div class="field">
+      <label for="mList">List</label>
+      <select id="mList"></select>
     </div>
     <div class="field">
       <label for="mDesc">Description</label>
@@ -1731,14 +1772,26 @@
         const n = document.createElement("span");
         n.className = "ac-name"; n.textContent = p.name + (p.isDept ? " · dept" : "");
         row.append(h, n);
-        row.addEventListener("mousedown", ev => { ev.preventDefault(); pick(i); });
+        const choose = ev => { ev.preventDefault(); pick(i); };
+        row.addEventListener("mousedown", choose);
+        // On touch the input blurs before a synthesized mousedown ever lands, which closes
+        // the popover out from under the tap. Take the touch directly instead.
+        row.addEventListener("touchstart", choose, { passive: false });
         b.appendChild(row);
       });
       const r = target.getBoundingClientRect();
       b.style.left = r.left + "px";
-      b.style.top = (r.bottom + 4) + "px";
       b.style.minWidth = r.width + "px";
       b.style.display = "block";
+      // The on-screen keyboard covers the bottom of the window, and visualViewport is the
+      // only thing that knows where it ends. Sitting below the input is the default; flip
+      // above when that would put the list under the keyboard (or off-screen) and there is
+      // room up top. Measure after display:block or offsetHeight is 0.
+      const vv = window.visualViewport;
+      const bottomLimit = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const h = b.offsetHeight;
+      const below = r.bottom + 4;
+      b.style.top = (below + h > bottomLimit && r.top - 4 - h > 0 ? r.top - 4 - h : below) + "px";
     }
 
     function pick(i) {
@@ -2160,15 +2213,63 @@
   // ---------- Card / list drag (pointer events) ----------
   // Cards and list headers used HTML5 drag-and-drop, which doesn't exist on iPhone and is
   // awkward on iPad. Pointer events cover mouse, pen and touch from one code path — the
-  // planner bars already work this way (see attachBarDrag). Movement up to DRAG_SLOP is a
-  // click, so tapping a card still opens it.
+  // planner bars already work this way (see attachBarDrag).
   //
-  // Touch is deliberately not armed yet: taking over a touch gesture requires
-  // `touch-action: none` on the element, which would also stop a finger scrolling the
-  // column. Phase 2 arms it behind a long-press and sets that property then. Until then a
-  // tap still opens a card on touch, because the plain click path below is untouched.
-  const DRAG_SLOP = 3;
+  // Mouse and pen arm as soon as the pointer moves past DRAG_SLOP; anything less is a
+  // click, so clicking a card still opens it.
+  //
+  // Touch can't work that way. A column scrolls vertically (.cards) and the board scrolls
+  // horizontally (main), and a finger starting on a card is far more often scrolling than
+  // dragging. `touch-action: none` would settle it in the drag's favour and cost us
+  // scrolling entirely — and it can't be flipped mid-gesture, because the browser latches
+  // it when the gesture begins. So touch arms on a long press instead: hold still for
+  // TOUCH_HOLD_MS and the drag takes over. Because the finger hasn't moved, no scroll is
+  // in flight, which is exactly the condition under which preventDefault() on a
+  // non-passive touchmove still suppresses one (see armTouchScrollBlock).
+  const DRAG_SLOP = 3;         // mouse/pen: past this it's a drag
+  const TOUCH_SLOP = 10;       // finger: move this far before the hold fires and it's a scroll
+  const TOUCH_HOLD_MS = 450;   // tune on hardware — see docs/ios-plan.md
   let dragGhost = null;
+
+  // Once a touch drag is armed the browser must stop scrolling for us. touch-action is
+  // already latched by now, so the only lever left is preventDefault on a non-passive
+  // touchmove — which works precisely because the long press guaranteed no scroll started.
+  function armTouchScrollBlock() {
+    const block = ev => ev.preventDefault();
+    document.addEventListener("touchmove", block, { passive: false });
+    return () => document.removeEventListener("touchmove", block, { passive: false });
+  }
+
+  // While we own the gesture the browser won't scroll either axis, so a card can't reach a
+  // list that's off-screen or a position below the fold unless we drive the scrolling
+  // ourselves. Runs off rAF from the last known pointer position.
+  const EDGE = 60;             // px from an edge where auto-scroll kicks in
+  const EDGE_MAX = 18;         // px per frame at the very edge
+  const autoScroll = (() => {
+    let raf = null, x = 0, y = 0;
+    const speed = (dist) => Math.ceil((1 - Math.max(0, dist) / EDGE) * EDGE_MAX);
+    function step() {
+      const boardEl = document.querySelector("main");
+      if (boardEl) {
+        const r = boardEl.getBoundingClientRect();
+        if (x - r.left < EDGE) boardEl.scrollLeft -= speed(x - r.left);
+        else if (r.right - x < EDGE) boardEl.scrollLeft += speed(r.right - x);
+      }
+      // Vertical scrolling belongs to whichever column the finger is over.
+      const over = document.elementFromPoint(x, y);
+      const cards = over && over.closest(".list") && over.closest(".list").querySelector(".cards");
+      if (cards && cards.scrollHeight > cards.clientHeight) {
+        const r = cards.getBoundingClientRect();
+        if (y - r.top < EDGE) cards.scrollTop -= speed(y - r.top);
+        else if (r.bottom - y < EDGE) cards.scrollTop += speed(r.bottom - y);
+      }
+      raf = requestAnimationFrame(step);
+    }
+    return {
+      track(ev) { x = ev.clientX; y = ev.clientY; if (raf === null) raf = requestAnimationFrame(step); },
+      stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; }
+    };
+  })();
 
   // A drag that ends over a card, a list title or a delete button would otherwise fire
   // that element's click as well. Swallow exactly one click, in the capture phase so it
@@ -2183,35 +2284,69 @@
     setTimeout(() => document.removeEventListener("click", kill, true), 250);
   }
 
-  // Wires one pointer gesture. onStart fires once, when movement passes DRAG_SLOP; onDrop
-  // receives the final event, or null if the OS took the gesture away (pointercancel).
+  // Wires one pointer gesture. onStart fires once, when the drag arms — on movement for
+  // mouse and pen, on a long press for touch. onDrop receives the final event, or null if
+  // the OS took the gesture away (pointercancel).
   function pointerDrag(e, { onStart, onMove, onDrop }) {
-    if (e.button !== 0) return;
-    if (e.pointerType === "touch") return;  // Phase 2
+    if (e.button !== 0) return;   // touch and pen report button 0 too
+    const touch = e.pointerType === "touch";
     const pid = e.pointerId, startX = e.clientX, startY = e.clientY;
-    let armed = false;
+    let armed = false, holdTimer = null, releaseScroll = null, last = e;
+
+    const arm = ev => {
+      armed = true;
+      holdTimer = null;
+      if (touch) releaseScroll = armTouchScrollBlock();
+      onStart(ev);
+      onMove(ev);
+      autoScroll.track(ev);
+    };
+
+    const cancelHold = () => {
+      if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+    };
+
     const move = ev => {
       if (ev.pointerId !== pid) return;
+      last = ev;
+      const dx = Math.abs(ev.clientX - startX), dy = Math.abs(ev.clientY - startY);
       if (!armed) {
-        if (Math.abs(ev.clientX - startX) <= DRAG_SLOP &&
-            Math.abs(ev.clientY - startY) <= DRAG_SLOP) return;
-        armed = true;
-        onStart(ev);
+        if (touch) {
+          // Moved before the hold fired: the finger is scrolling. Stand down and leave the
+          // gesture to the browser — we never called preventDefault, so it still owns it.
+          if (dx > TOUCH_SLOP || dy > TOUCH_SLOP) { cancelHold(); finish(null, true); }
+          return;
+        }
+        if (dx <= DRAG_SLOP && dy <= DRAG_SLOP) return;
+        arm(ev);
+        return;
       }
       onMove(ev);
+      autoScroll.track(ev);
     };
-    const up = ev => {
-      if (ev.pointerId !== pid) return;
+
+    const finish = (ev, standDown) => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", up);
       document.removeEventListener("pointercancel", up);
-      if (!armed) return;  // never moved: leave it to be the click it was
+      cancelHold();
+      autoScroll.stop();
+      if (releaseScroll) { releaseScroll(); releaseScroll = null; }
+      if (standDown || !armed) return;  // never armed: leave it to be the tap/click it was
       swallowNextClick();
-      onDrop(ev.type === "pointercancel" ? null : ev);
+      onDrop(ev);
     };
+
+    const up = ev => {
+      if (ev.pointerId !== pid) return;
+      finish(ev.type === "pointercancel" ? null : ev, false);
+    };
+
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
     document.addEventListener("pointercancel", up);
+
+    if (touch) holdTimer = setTimeout(() => arm(last), TOUCH_HOLD_MS);
   }
 
   // A copy of the dragged element that follows the pointer. Without it the drag has no
@@ -2239,6 +2374,7 @@
   }
 
   function endDrag() {
+    autoScroll.stop();
     if (dragGhost) { dragGhost.remove(); dragGhost = null; }
     document.body.classList.remove("pl-dragging");
     document.querySelectorAll(".dragging").forEach(n => n.classList.remove("dragging"));
@@ -3147,6 +3283,7 @@
   const mDesc = document.getElementById("mDesc");
   const mDue = document.getElementById("mDue");
   const mLabels = document.getElementById("mLabels");
+  const mList = document.getElementById("mList");
   const mContext = document.getElementById("modalContext");
   let modalRef = null; // { board, list, card }
   let modalLabels = [];
@@ -3160,6 +3297,16 @@
     mContext.innerHTML = "";
     const b = document.createElement("b"); b.textContent = list.name;
     mContext.append(document.createTextNode("in list "), b);
+    // Moving without dragging: the only route VoiceOver has, and faster than dragging
+    // across a wide board anyway.
+    mList.innerHTML = "";
+    (board.lists || []).forEach(l => {
+      const o = document.createElement("option");
+      o.value = l.id;
+      o.textContent = l.name;
+      o.selected = l.id === list.id;
+      mList.appendChild(o);
+    });
     renderLabelPicker();
     overlay.classList.add("open");
     mTitle.focus();
@@ -3193,6 +3340,18 @@
     modalRef.card.desc = mDesc.value;
     modalRef.card.due = mDue.value;
     modalRef.card.labels = modalLabels;
+    // Picked a different list: move the card there, to the end. Do this after the field
+    // edits so both land in one save(), i.e. one undo step and one write.
+    const toId = mList.value;
+    if (toId && toId !== modalRef.list.id) {
+      const { board, list, card } = modalRef;
+      const to = (board.lists || []).find(l => l.id === toId);
+      const i = list.cards.findIndex(c => c.id === card.id);
+      if (to && i !== -1) {
+        list.cards.splice(i, 1);
+        to.cards.push(card);
+      }
+    }
     save(); closeModal(); renderAll();
   });
   document.getElementById("mCancel").addEventListener("click", closeModal);
