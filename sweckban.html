@@ -606,6 +606,14 @@
      grows, via a transparent ::after — a pseudo-element never becomes the event target, so
      the existing hit-testing in attachBarDrag still sees the handle itself. */
   @media (pointer: coarse) {
+    /* iOS zooms the page in when you focus a control whose text is under 16px — 13px
+       fields gave a 1.23x zoom, which left the layout correct but the right-hand side of
+       every field off-screen. The alternative fix, maximum-scale=1, would disable pinch
+       zoom for everyone, so raise the type instead: it is better under a finger anyway. */
+    input[type="text"], input[type="date"], input[type="search"], textarea, select {
+      font-size: 16px;
+    }
+    #searchInput, .add-card-input { font-size: 16px; }
     .card { padding: 12px; }
     .list-header { padding: 14px 12px; }
     .add-card-input { padding: 11px 10px; }
@@ -770,6 +778,93 @@
     aside { border-right: none; border-bottom: 1px solid var(--hairline); max-height: 40vh; }
     main { overflow-y: auto; }
   }
+  /* ---------- Phone ----------
+     Under this width there is no room for a sidebar column beside a board, and columns
+     sized for a mouse are wider than the screen. Keep the breakpoint in step with
+     PHONE_MQ in the script. The scrim is inert above it, so it is declared here only. */
+  .sidebar-scrim { display: none; }
+
+  @media (max-width: 600px) {
+    /* Header: the tagline is the first thing to go, then the search field narrows. */
+    header { gap: 8px; padding-left: 12px; padding-right: 12px; }
+    .tagline { display: none; }
+    /* Brand and controls each take a full row — squeezed onto one row there is nothing
+       left for the search field but an ellipsis. On its own row it can have the slack. */
+    .header-left, header > span { flex: 1 1 100%; }
+    .search-box { flex: 1; min-width: 0; }
+    #searchInput, #searchInput:focus { width: 100%; }
+
+    /* The sidebar leaves the grid and becomes a slide-over sheet. `sidebar-collapsed`
+       still means "not on screen", so the existing toggle button needs no special case.
+       z-index sits below .overlay (10) so a modal still covers the sheet. */
+    .layout { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    aside {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: min(84vw, 320px);
+      max-height: none;
+      z-index: 8;
+      overflow-y: auto;
+      border-right: 1px solid var(--hairline);
+      border-bottom: none;
+      transform: translateX(0);
+      transition: transform .22s ease;
+      /* Add to the base 16px/14px rather than replacing it — the insets are 0 in portrait,
+         which would leave the fields flush against the edge of the screen. */
+      padding-top: calc(16px + env(safe-area-inset-top));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+      padding-left: calc(14px + env(safe-area-inset-left));
+    }
+    /* Beats `.layout.sidebar-collapsed aside { display: none }` on source order. */
+    .layout.sidebar-collapsed aside { display: block; transform: translateX(-101%); }
+    .sidebar-scrim {
+      display: block;
+      position: fixed; inset: 0; z-index: 7;
+      background: rgba(0, 0, 0, 0.5);
+      transition: opacity .22s ease;
+    }
+    .layout.sidebar-collapsed .sidebar-scrim { opacity: 0; pointer-events: none; }
+
+    /* One column at a time, snapped. The DOM is unchanged — this is only sizing.
+       `main.fixed-width .list` is more specific than `main .list`, so it has to be named
+       here too or the 270px fixed-width rule would win whatever the source order. */
+    main {
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      gap: 10px;
+    }
+    main .list, main.fixed-width .list {
+      flex: 0 0 88vw;
+      min-width: 88vw;
+      max-width: 88vw;
+      scroll-snap-align: center;
+    }
+    main .list.collapsed, main.fixed-width .list.collapsed {
+      flex: 0 0 44px; min-width: 44px; max-width: 44px;
+    }
+    /* A drag drives main.scrollLeft itself; mandatory snapping fights it back to the
+       nearest column, so suspend snapping for the duration. */
+    body.pl-dragging main { scroll-snap-type: none; }
+
+    /* Modals go full-screen: milestone rows and assignee checklists need the room, and a
+       centred card with 60px of padding wastes most of a phone. */
+    .overlay { padding: 0; align-items: stretch; }
+    .modal {
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100%;
+      border: none;
+      border-radius: 0;
+      padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* Planner: month zoom and the narrow name column are forced in the script (plZoom,
+       plNameW); this is just the type scale that goes with them. */
+    .pl-name-text { font-size: 12px; }
+    .pl-ms-label { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -1080,6 +1175,14 @@
   // Which shell is hosting us. Only the storage affordances in Settings branch on this —
   // one HTML file serves both platforms, so resist adding more.
   const PLATFORM = window.__SWECKBAN_PLATFORM === "ios" ? "ios" : "macos";
+
+  // ---------- Phone layout ----------
+  // The board assumes a sidebar plus room for several columns; under this width it gets
+  // neither. Width, not platform: a narrow window on the Mac has the same problem, and an
+  // iPad in a half-width Split View is a phone as far as the layout is concerned. The CSS
+  // uses the same 600px breakpoint — keep the two in step.
+  const PHONE_MQ = window.matchMedia("(max-width: 600px)");
+  const isPhone = () => PHONE_MQ.matches;
 
   // ---------- Which board is on screen (device-local) ----------
   // This used to live in the synced file, so opening a different board on the Mac nudged
@@ -2172,6 +2275,7 @@
       item.append(icon, name, right);
       item.addEventListener("click", () => {
         setActiveBoard(b.id);
+        if (isPhone()) setSidebarCollapsed(true);  // you picked a board; show it
         renderAll();   // view state only — nothing to save, nothing to sync
       });
       boardListEl.appendChild(item);
@@ -2488,7 +2592,12 @@
   // ---------- Planner timeline geometry ----------
   const PL_DAY = 86400000;
   const PL_ZOOM = { year: 0.72, quarter: 2.0, month: 5.2 };  // px per day
-  const PL_NAME_W = 220;
+  // The name column is a fixed pixel width set from JS (it has to match the sticky corner
+  // and the grid lines), so the phone variant lives here rather than in the stylesheet.
+  const plNameW = () => isPhone() ? 116 : 220;
+  // A year across 375px is a few pixels per month — unreadable and untouchable. Month zoom
+  // is the only one that works on a phone, so force it rather than offering the choice.
+  const plZoom = () => isPhone() ? "month" : plannerZoom;
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const plParse = s => { if (!s) return null; const d = new Date(s + "T12:00:00"); return isNaN(d) ? null : d; };
   const plYearStart = y => new Date(y, 0, 1, 12);
@@ -2530,7 +2639,9 @@
   };
   // Group tasks into swimlanes by assignee (departments, then people, then Unassigned)
   function plannerGroups(tasks) {
-    if (!plannerGroup) return [{ header: null, tasks }];
+    // Swimlanes on a phone would divide rows that are already as narrow as they can be,
+    // and the toggle isn't reachable there, so a preference set on the Mac doesn't carry.
+    if (!plannerGroup || isPhone()) return [{ header: null, tasks }];
     const keysOf = t => (t.assignees || []).map(a => a.type + ":" + a.id);
     const order = [];
     state.departments.forEach(d => order.push({ key: "dept:" + d.id, name: d.name, color: d.color }));
@@ -2552,7 +2663,7 @@
   function renderPlannerGrid(board, grid) {
     const tasks = (board.tasks || []).filter(t => !t.archived && plannerRowMatches(t));
     let { start, end, minY, maxY } = plannerRange(board);
-    const pxPerDay = PL_ZOOM[plannerZoom];
+    const pxPerDay = PL_ZOOM[plZoom()];
     // Extend the range with whole future years so the timeline fills the visible width
     // instead of ending mid-screen. Fall back to window width if the board hasn't laid
     // out yet (clientWidth can read tiny mid-render).
@@ -2561,7 +2672,7 @@
       const collapsed = document.querySelector(".layout") && document.querySelector(".layout").classList.contains("sidebar-collapsed");
       availW = window.innerWidth - (collapsed ? 0 : 260);
     }
-    availW = availW - PL_NAME_W - 6;
+    availW = availW - plNameW() - 6;
     while (availW > 0 && (Math.round((end - start) / PL_DAY) + 1) * pxPerDay < availW) {
       maxY += 1;
       end = plYearEnd(maxY);
@@ -2572,14 +2683,14 @@
 
     const inner = document.createElement("div");
     inner.className = "pl-inner";
-    inner.style.width = (PL_NAME_W + trackW) + "px";
+    inner.style.width = (plNameW() + trackW) + "px";
 
     // Header: year bands (top) + sub-period labels (bottom)
     const header = document.createElement("div");
     header.className = "pl-header";
     const corner = document.createElement("div");
     corner.className = "pl-corner";
-    corner.style.width = PL_NAME_W + "px";
+    corner.style.width = plNameW() + "px";
     corner.textContent = "Task";
     const scale = document.createElement("div");
     scale.className = "pl-scale";
@@ -2592,7 +2703,7 @@
       yl.textContent = y;
       scale.appendChild(yl);
     }
-    const subs = plSubPeriods(minY, maxY, plannerZoom);
+    const subs = plSubPeriods(minY, maxY, plZoom());
     subs.forEach(s => {
       const el = document.createElement("div");
       el.className = "pl-sub";
@@ -2609,7 +2720,7 @@
 
     const lines = document.createElement("div");
     lines.className = "pl-gridlines";
-    lines.style.left = PL_NAME_W + "px";
+    lines.style.left = plNameW() + "px";
     lines.style.width = trackW + "px";
     for (let y = minY; y <= maxY + 1; y++) {
       const gl = document.createElement("div");
@@ -2684,7 +2795,7 @@
 
       const name = document.createElement("div");
       name.className = "pl-name";
-      name.style.width = PL_NAME_W + "px";
+      name.style.width = plNameW() + "px";
       const dot = document.createElement("span");
       dot.className = "pl-name-dot";
       dot.style.background = taskColor(task);
@@ -2755,7 +2866,7 @@
         lane.className = "pl-row pl-lane";
         const lname = document.createElement("div");
         lname.className = "pl-name pl-lane-name";
-        lname.style.width = PL_NAME_W + "px";
+        lname.style.width = plNameW() + "px";
         if (g.header.color) {
           const ld = document.createElement("span");
           ld.className = "pl-name-dot";
@@ -2777,6 +2888,17 @@
 
     inner.appendChild(body);
     grid.appendChild(inner);
+
+    // The timeline always begins in January of the earliest year, which at month zoom can
+    // be a long way left of anything you actually have. A re-render rebuilds this element
+    // and so resets its scroll to 0 regardless, so opening on today rather than on January
+    // costs nothing and is the difference between seeing your tasks and seeing an empty
+    // winter. Clamped into range for a board that is entirely in the past or future.
+    const now = new Date(); now.setHours(12, 0, 0, 0);
+    const focus = now < start ? start : (now > end ? end : now);
+    requestAnimationFrame(() => {
+      grid.scrollLeft = Math.max(0, xOf(focus) - Math.min(120, grid.clientWidth * 0.25));
+    });
 
     if (!tasks.length) {
       const empty = document.createElement("div");
@@ -2803,24 +2925,28 @@
     addTaskBtn.addEventListener("click", () => openTaskModal(board, null));
     left.appendChild(addTaskBtn);
 
-    // Zoom control
-    const zoomSeg = document.createElement("div");
-    zoomSeg.className = "seg";
-    [["year", "Year"], ["quarter", "Quarter"], ["month", "Month"]].forEach(([val, label]) => {
-      const b = document.createElement("button");
-      b.className = "seg-btn" + (plannerZoom === val ? " on" : "");
-      b.textContent = label;
-      b.addEventListener("click", () => setPlannerZoom(val));
-      zoomSeg.appendChild(b);
-    });
-    left.appendChild(zoomSeg);
+    // Zoom and grouping are desktop-only: on a phone the zoom is pinned to month (see
+    // plZoom) and swimlanes would divide rows that are already as narrow as they go.
+    if (!isPhone()) {
+      // Zoom control
+      const zoomSeg = document.createElement("div");
+      zoomSeg.className = "seg";
+      [["year", "Year"], ["quarter", "Quarter"], ["month", "Month"]].forEach(([val, label]) => {
+        const b = document.createElement("button");
+        b.className = "seg-btn" + (plannerZoom === val ? " on" : "");
+        b.textContent = label;
+        b.addEventListener("click", () => setPlannerZoom(val));
+        zoomSeg.appendChild(b);
+      });
+      left.appendChild(zoomSeg);
 
-    const groupBtn = document.createElement("button");
-    groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
-    groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
-    groupBtn.title = "Group rows into swimlanes by assignee";
-    groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
-    left.appendChild(groupBtn);
+      const groupBtn = document.createElement("button");
+      groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
+      groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
+      groupBtn.title = "Group rows into swimlanes by assignee";
+      groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
+      left.appendChild(groupBtn);
+    }
 
     toolbar.append(left);
     root.appendChild(toolbar);
@@ -3651,16 +3777,34 @@
   const SIDEBAR_COLLAPSED_KEY = "sweckban.sidebarCollapsed";
   const layoutEl = document.querySelector(".layout");
   const sidebarToggle = document.getElementById("sidebarToggle");
-  function setSidebarCollapsed(collapsed) {
+  // On a phone the same class drives a slide-over sheet instead of a hidden column (see
+  // the phone block in the stylesheet), so "collapsed" still means "not on screen" and the
+  // toggle button keeps working unchanged. What differs is that the state isn't written
+  // down: the sheet should start shut every time, and a phone must not overwrite the
+  // preference the Mac set.
+  const scrim = document.createElement("div");
+  scrim.className = "sidebar-scrim";
+  scrim.addEventListener("click", () => setSidebarCollapsed(true));
+  document.querySelector(".layout").appendChild(scrim);
+
+  function setSidebarCollapsed(collapsed, remember = true) {
     layoutEl.classList.toggle("sidebar-collapsed", collapsed);
     sidebarToggle.setAttribute("aria-pressed", String(collapsed));
-    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    if (remember && !isPhone()) {
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    }
     requestAnimationFrame(updateScrollFades); // board width changed
   }
   let sidebarCollapsed = false;
   try { sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"; } catch (e) {}
-  setSidebarCollapsed(sidebarCollapsed);
+  setSidebarCollapsed(isPhone() ? true : sidebarCollapsed, false);
   sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!layoutEl.classList.contains("sidebar-collapsed")));
+  // Rotating, or dragging a Split View divider, crosses the breakpoint mid-session: shut
+  // the sheet on the way in, restore the remembered column on the way out.
+  PHONE_MQ.addEventListener("change", e => {
+    setSidebarCollapsed(e.matches ? true : sidebarCollapsed, false);
+    renderAll();   // the planner's pixel metrics are computed per render
+  });
 
   // ---------- Archive drawer ----------
   const archiveBtn = document.getElementById("archiveBtn");

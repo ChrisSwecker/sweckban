@@ -309,14 +309,25 @@ whether a hold feels responsive or sluggish.
 
 The UI assumes a sidebar plus a wide board. Under ~600px:
 
-- [ ] Sidebar becomes a slide-over sheet opened from a top bar (boards, people, departments
+- [x] Sidebar becomes a slide-over sheet opened from a top bar (boards, people, departments
       all live there already; nothing new, just hidden by default).
-- [ ] Kanban: columns become full-width pages in a horizontally snapping scroller
+- [x] Kanban: columns become full-width pages in a horizontally snapping scroller
       (`scroll-snap-type: x mandatory`, each `.list` ~88vw). Keep the existing DOM.
-- [ ] Planner: force month zoom, narrow the name column, hide swimlane grouping; consider
-      read-only on phone in the first cut and say so in the UI.
-- [ ] Modals go full-screen; the milestone rows and assignee checklists need scroll room.
-- [ ] Verify with the Simulator at iPhone SE (375pt) and iPhone Pro Max widths.
+- [x] Planner: force month zoom, narrow the name column, hide swimlane grouping.
+      **Not** read-only: the bars already carry `touch-action: none` and Phase 2 gave the
+      handles and diamonds finger-sized hit areas, so editing works and saying "read-only"
+      would have been a bigger claim than the code needed.
+- [x] Modals go full-screen; the milestone rows and assignee checklists need scroll room.
+- [x] Verified on the Simulator at 390pt (iPhone 17e — no SE runtime is installed, so this
+      is the narrowest available; 15pt wider than an SE) and at 440pt (17 Pro Max).
+
+**Status:** done. Two things worth carrying forward. **iOS zooms the page when you focus a
+control whose font is under 16px** — our 13px fields produced a 1.23x zoom that left the
+layout correct but pushed the right edge of every field off-screen; form controls are now
+16px under `pointer: coarse`, which is the fix that keeps pinch zoom (`maximum-scale=1`
+would not). And forcing month zoom meant the timeline opened in January with the tasks
+months off-screen, so the planner now opens scrolled to today — that also changes the Mac,
+mildly (70px at year zoom) and for the better.
 
 ### Phase 4 — Polish and icon
 
