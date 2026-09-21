@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sweck/ban — Kanban &amp; Planner</title>
 <style>
   :root {
@@ -47,13 +47,19 @@
     font-family: var(--sans);
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
+    /* Kills the double-tap-to-zoom delay on touch without disabling pinch zoom. */
+    touch-action: manipulation;
   }
   .frame {
     height: 100vh;
+    height: 100dvh;          /* iOS: the toolbar-aware height, not the static one */
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
+  /* The web view runs edge to edge (viewport-fit=cover), so the page owns its insets.
+     env() is 0 everywhere else, so the header and board rules below need no platform
+     check — see `header` and `main`. */
 
   /* ---------- Header ---------- */
   header {
@@ -61,7 +67,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 20px;
+    padding: calc(12px + env(safe-area-inset-top)) 20px 12px;
     border-bottom: 1px solid var(--hairline);
     flex-wrap: wrap;
     background: var(--sidebar);
@@ -339,7 +345,8 @@
   main {
     flex: 1;
     min-height: 0;
-    padding: 18px 20px;
+    padding: 18px calc(20px + env(safe-area-inset-right))
+             calc(18px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
     overflow-x: auto;
     overflow-y: hidden;
     display: flex;
@@ -1451,12 +1458,15 @@
       const buttons = document.getElementById("fileButtons");
       buttons.innerHTML = "";
       if (PLATFORM === "ios") {
-        // No Finder, and no user-visible file system to point at: the data lives in the
-        // app's iCloud container and that is the whole story.
+        // No Finder, and no user-visible file system to point at. Don't claim iCloud when
+        // the shell couldn't reach the container (signed out, iCloud Drive off, simulator)
+        // — it still works, it just isn't syncing, and the user should know which.
         buttons.style.display = "none";
-        setStatus("Synced through iCloud", true);
-        document.getElementById("storageNote").innerHTML =
-          "Every change writes straight to Sweckban's iCloud storage, so your boards stay in step with your Mac. Use <b>Export JSON</b> for a copy you can keep elsewhere.";
+        const synced = window.__SWECKBAN_SYNCED !== false;
+        setStatus(synced ? "Synced through iCloud" : "On this device only", synced);
+        document.getElementById("storageNote").innerHTML = synced
+          ? "Every change writes straight to Sweckban's iCloud storage, so your boards stay in step with your Mac. Use <b>Export JSON</b> for a copy you can keep elsewhere."
+          : "Sweckban couldn't reach its iCloud storage, so your boards are saved on this device only and won't reach your Mac. Check that you're signed in to iCloud with iCloud Drive on, then reopen Sweckban. Use <b>Export JSON</b> to keep a copy in the meantime.";
         return;
       }
       const reveal = document.createElement("button");
@@ -3611,6 +3621,28 @@
   // Let the native menu bar (Phase 5) drive board-level undo/redo
   window.__sweckbanUndo = undo;
   window.__sweckbanRedo = redo;
+
+  // iOS has no menu bar, so undo/redo need somewhere to live. A pair of header buttons
+  // beats shake-to-undo: it is discoverable, and shake is easy to trigger by accident.
+  if (PLATFORM === "ios") {
+    const tools = document.getElementById("settingsBtn").parentNode;
+    const icon = d =>
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const mk = (title, path, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn subtle icon-btn";
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.innerHTML = icon(path);   // static markup, same as the other header icons
+      b.addEventListener("click", fn);
+      return b;
+    };
+    tools.prepend(
+      mk("Undo", '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/>', () => undo()),
+      mk("Redo", '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h4"/>', () => redo())
+    );
+  }
 
   // ---------- Native menu bridge + Dock badge (Phase 5) ----------
   function switchBoard(dir) {

@@ -227,40 +227,49 @@ created conflict version is merged and cleared.
 
 ### Phase 1 — iPad shell with full sync parity
 
-- [ ] `ios/Sweckban.xcodeproj`, iOS 17+ deployment target, SwiftUI `App` hosting a
+- [x] `ios/Sweckban.xcodeproj`, iOS 17+ deployment target, SwiftUI `App` hosting a
       `UIViewRepresentable` around `WKWebView` (or plain UIKit — either is fine; keep it
       to two or three files). Bundle ID `com.swecker.sweckban`, automatic signing, team
       `2V6HCLJ5U4`. Turn on **iCloud → iCloud Documents** with container
       `iCloud.com.swecker.sweckban` in Signing & Capabilities; confirm the generated
       `.entitlements` contains `application-identifier`, both container-identifier keys,
       and `icloud-services = CloudDocuments`.
-- [ ] Add `../sweckban.html` to the target as a referenced bundle resource. Load with
+- [x] Add `../sweckban.html` to the target as a referenced bundle resource. Load with
       `loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())`.
-- [ ] Port the bridge and persistence from `main.swift` (section 1). Same handler name
+- [x] Port the bridge and persistence from `main.swift` (section 1). Same handler name
       `sweckban`, same injected globals plus `__SWECKBAN_PLATFORM = "ios"`, same
       navigation lockdown and frame check, coordinated I/O, presenter, `ensureDownloaded`,
       content-based `syncFromDisk`, background flush via `__sweckbanCurrentState()`.
-- [ ] **First-launch states**, in order: resolving the container (background thread,
+- [x] **First-launch states**, in order: resolving the container (background thread,
       show a spinner); container file present but not downloaded (`ensureDownloaded` with
       the spinner still up); no file at all (a Mac hasn't synced yet — start with the seed
       board, and the merge will reconcile when the Mac's file arrives); file unreadable
       (refuse to boot with a message, never seed over it — same rule as the Mac).
-- [ ] `WKUIDelegate` for `alert`/`confirm` → `UIAlertController`. The page uses both.
-- [ ] `badge` cmd → `UNUserNotificationCenter` badge (needs `.badge` authorization; ask
+- [x] `WKUIDelegate` for `alert`/`confirm` → `UIAlertController`. The page uses both.
+- [x] `badge` cmd → `UNUserNotificationCenter` badge (needs `.badge` authorization; ask
       once, silently skip if denied).
-- [ ] `export` cmd → write to a temp file and present `UIActivityViewController`.
-- [ ] `WKWebView` setup: `scrollView.bounces = false`, `contentInsetAdjustmentBehavior = .never`
+- [x] `export` cmd → write to a temp file and present `UIActivityViewController`.
+- [x] `WKWebView` setup: `scrollView.bounces = false`, `contentInsetAdjustmentBehavior = .never`
       (the page owns safe areas), `allowsBackForwardNavigationGestures = false`.
-- [ ] Viewport meta: `width=device-width, initial-scale=1, viewport-fit=cover`. Add
+- [x] Viewport meta: `width=device-width, initial-scale=1, viewport-fit=cover`. Add
       `padding: env(safe-area-inset-*)` on the app frame. Do **not** disable user zoom
       with `maximum-scale`; use `touch-action: manipulation` on the body to kill
       double-tap zoom instead.
 - [ ] Hardware keyboard on iPad: the existing shortcuts (⌘F search, ⌘Z undo, ⌘, settings)
       already work through the web layer. Add `UIKeyCommand`s only for things the web
       layer can't see (nothing, probably).
-- [ ] Undo/redo affordance without a menu bar: a small toolbar in the web UI when
+- [x] Undo/redo affordance without a menu bar: a small toolbar in the web UI when
       `__SWECKBAN_PLATFORM === "ios"`, or support shake-to-undo by forwarding
       `motionEnded` to `__sweckbanUndo`. Toolbar is more discoverable.
+
+**Status:** built and running on the iPad simulator. Verified there: boot, the save bridge
+writing to disk, a coordinated external write applying live without relaunch (and merging
+rather than clobbering a local edit), the iOS Settings copy, export via the share sheet,
+safe-area insets, tap-to-open-card, and a background/foreground round trip. The simulator
+has no ubiquity container (an unsigned build gets no entitlements), so it exercised the
+local-Documents fallback — which means **none of the numbered acceptance tests below are
+done**; they all need a signed device build on the real iCloud account. The hardware-keyboard
+item is also untested.
 
 Acceptance (test with the iOS Simulator tool, signed into the same iCloud account, plus
 one real device):

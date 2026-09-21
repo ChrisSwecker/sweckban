@@ -13,3 +13,7 @@ icon.iconset/
 # source folder.
 sweckban-data.json
 backups/
+
+# Xcode derived data for the iOS target
+ios/build/
+ios/**/xcuserdata/
