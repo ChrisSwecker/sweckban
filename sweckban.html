@@ -1174,6 +1174,142 @@
     persistState(); renderAll();
   }
 
+  // ============================================================
+  // Merging two versions of the data
+  // ============================================================
+  // MERGE:BEGIN — pure functions, no DOM and no app state. tests/merge.test.js pulls
+  // everything between these markers and runs it in Node, so keep it self-contained.
+  //
+  // Sync is one JSON file, so without this two devices editing while offline are
+  // last-writer-wins: whoever saves second silently erases the other's work. Every
+  // entity carries updatedAt and every hard delete leaves a tombstone, which is enough
+  // to merge per entity rather than per file.
+  //
+  //   - Touched on one side only: keep it.
+  //   - Touched on both: newer updatedAt wins, as a whole entity. updatedAt is per
+  //     entity, so merging individual fields would be inventing precision we don't have.
+  //   - Deleted one side, edited the other: the delete wins, unless the edit came after
+  //     it — then the entity comes back.
+  //   - Order (lists in a board, cards in a list) follows whichever container was
+  //     touched later, because moving something bumps its container's updatedAt.
+  //     Anything only the other side has is appended, never dropped.
+  //   - Ties on updatedAt break on content, so both devices reach the same answer.
+
+  const mergeTs = e => (e && typeof e.updatedAt === "number") ? e.updatedAt : 0;
+
+  function pickNewer(a, b) {
+    const ta = mergeTs(a), tb = mergeTs(b);
+    if (ta !== tb) return ta > tb ? a : b;
+    // Same millisecond — decide by content, or each device keeps preferring its own
+    // copy and they never converge.
+    return JSON.stringify(a) >= JSON.stringify(b) ? a : b;
+  }
+
+  function mergeTombstones(a, b) {
+    const out = {};
+    for (const k in (a || {})) out[k] = a[k];
+    for (const k in (b || {})) out[k] = Math.max(out[k] || 0, b[k]);
+    return out;
+  }
+
+  // A delete wins unless the entity was edited after the delete happened.
+  function tombstoned(id, item, tombs) {
+    const t = tombs[id];
+    return typeof t === "number" && t >= mergeTs(item);
+  }
+
+  function mergeById(mine, theirs, tombs, mergeOne, orderFromMine) {
+    mine = Array.isArray(mine) ? mine : [];
+    theirs = Array.isArray(theirs) ? theirs : [];
+    const pairs = new Map();
+    mine.forEach(x => { if (x && x.id) pairs.set(x.id, { a: x }); });
+    theirs.forEach(x => {
+      if (!x || !x.id) return;
+      const e = pairs.get(x.id) || {};
+      e.b = x;
+      pairs.set(x.id, e);
+    });
+
+    const kept = new Map();
+    pairs.forEach((e, id) => {
+      const item = (e.a && e.b) ? mergeOne(e.a, e.b) : (e.a || e.b);
+      if (!tombstoned(id, item, tombs)) kept.set(id, item);
+    });
+
+    const first = orderFromMine ? mine : theirs;
+    const second = orderFromMine ? theirs : mine;
+    const out = [], seen = new Set();
+    [first, second].forEach(src => src.forEach(x => {
+      if (x && x.id && kept.has(x.id) && !seen.has(x.id)) { seen.add(x.id); out.push(kept.get(x.id)); }
+    }));
+    return out;
+  }
+
+  function mergeList(a, b, tombs) {
+    const base = pickNewer(a, b);
+    const out = Object.assign({}, base);
+    out.cards = mergeById(a.cards, b.cards, tombs, pickNewer, base === a);
+    return out;
+  }
+
+  // A card moved between lists sits in the old list on one side and the new list on the
+  // other, so merging leaves it in both. Keep it wherever the later-touched list says.
+  function dedupeCards(lists) {
+    const home = new Map();
+    lists.forEach(l => (l.cards || []).forEach(c => {
+      const cur = home.get(c.id);
+      home.set(c.id, cur ? pickNewer(cur, l) : l);
+    }));
+    lists.forEach(l => { l.cards = (l.cards || []).filter(c => home.get(c.id) === l); });
+  }
+
+  function mergeBoard(a, b, tombs) {
+    const base = pickNewer(a, b);
+    const fromA = base === a;
+    const out = Object.assign({}, base);
+    if (Array.isArray(a.lists) || Array.isArray(b.lists)) {
+      out.lists = mergeById(a.lists, b.lists, tombs, (x, y) => mergeList(x, y, tombs), fromA);
+      dedupeCards(out.lists);
+    }
+    if (Array.isArray(a.tasks) || Array.isArray(b.tasks)) {
+      out.tasks = mergeById(a.tasks, b.tasks, tombs, pickNewer, fromA);
+    }
+    return out;
+  }
+
+  // Both arguments are whole state objects. activeBoard is deliberately not merged —
+  // which board is on screen is this device's business, not shared data.
+  function mergeStates(mine, theirs) {
+    const tombs = mergeTombstones(mine.tombstones, theirs.tombstones);
+    const latest = s => (s.boards || []).reduce((m, b) => Math.max(m, mergeTs(b)), 0);
+    const orderFromMine = latest(mine) >= latest(theirs);
+    const out = {
+      schema: Math.max(Number(mine.schema) || 1, Number(theirs.schema) || 1),
+      activeBoard: mine.activeBoard,
+      boards: mergeById(mine.boards, theirs.boards, tombs,
+                        (a, b) => mergeBoard(a, b, tombs), orderFromMine),
+      people: mergeById(mine.people, theirs.people, tombs, pickNewer, orderFromMine),
+      departments: mergeById(mine.departments, theirs.departments, tombs, pickNewer, orderFromMine),
+      tombstones: tombs,
+    };
+    if (!out.boards.find(b => b.id === out.activeBoard)) {
+      out.activeBoard = out.boards[0] ? out.boards[0].id : null;
+    }
+    return out;
+  }
+
+  // Key-order-insensitive comparison, so a merge that changed nothing isn't written back
+  // and bounced to every other device. activeBoard is excluded as device-local.
+  function sameData(a, b) {
+    const canon = v => JSON.stringify(v, (k, val) =>
+      k === "activeBoard" ? undefined
+        : (val && typeof val === "object" && !Array.isArray(val))
+          ? Object.keys(val).sort().reduce((o, kk) => { o[kk] = val[kk]; return o; }, {})
+          : val);
+    return canon(a) === canon(b);
+  }
+  // MERGE:END
+
   // ---------- Save file (File System Access API) ----------
   const FS_SUPPORTED = "showOpenFilePicker" in window;
   let fileHandle = null;
@@ -1206,14 +1342,18 @@
     }
   }
 
-  async function readFromFile() {
+  // merge: true when picking up someone else's change (the file moved under us). On a
+  // first connect we adopt the file wholesale instead — there is nothing local worth
+  // keeping, and merging would drag the seed board along.
+  async function readFromFile({ merge = false } = {}) {
     const f = await fileHandle.getFile();
     lastKnownMod = f.lastModified;
     const text = await f.text();
     if (!text.trim()) return false; // empty/new file
     const parsed = JSON.parse(text);
     if (!parsed || !Array.isArray(parsed.boards)) throw new Error("Invalid data");
-    state = parsed;
+    const next = merge ? mergeStates(state, parsed) : parsed;
+    state = next.boards.length ? next : parsed;
     if (!state.boards.length) state = seed();
     if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
     return true;
@@ -1341,10 +1481,11 @@
         const f = await fileHandle.getFile();
         if (f.lastModified > lastKnownMod) {
           closeModal(); closeTaskModal(); closeArchive();  // don't leave an editor on stale objects
-          await readFromFile();
+          await readFromFile({ merge: true });
           localStorage.setItem(STORE_KEY, JSON.stringify(state));
           resetUndoBaseline();
           renderAll();
+          persistState();  // write the merge back so the other device sees it too
           setStatus(`Connected: ${fileHandle.name} — reloaded newer version`, true);
         }
       } catch (e) { /* file temporarily unavailable (iCloud sync) — ignore */ }
@@ -3135,14 +3276,23 @@
       const hadEditorOpen = overlay.classList.contains("open") || taskOverlay.classList.contains("open");
       closeModal(); closeTaskModal(); closeArchive();
       document.body.classList.remove("pl-dragging");
-      state = parsed;
       readOnlyReason = schemaProblem(parsed);
-      lastPersisted = json;  // this is what's on disk now
-      if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
+      // Merge rather than replace. The arriving file is not necessarily newer in every
+      // respect — it can be missing edits made here while the other device was offline.
+      const merged = readOnlyReason ? parsed : mergeStates(state, parsed);
+      const keptLocalEdits = !readOnlyReason && !sameData(merged, parsed);
+      state = merged.boards.length ? merged : parsed;
+      lastPersisted = json;  // what is on disk right now
+      if (!state.boards.find(b => b.id === state.activeBoard)) {
+        state.activeBoard = state.boards[0] ? state.boards[0].id : null;
+      }
       resetUndoBaseline();
       renderAll();
+      // We held something the incoming file didn't, so push the merge back out and let
+      // the other device converge on it.
+      if (keptLocalEdits) save();
       if (readOnlyReason) alert(readOnlyReason);
-      else if (hadEditorOpen) alert("Sweckban loaded newer data synced from another device, so the editor you had open was closed. Re-open the card or task to make your change again.");
+      else if (hadEditorOpen) alert("Sweckban merged in changes synced from another device, so the editor you had open was closed. Your own edits were kept — re-open the card or task to carry on.");
     } catch (e) { /* ignore malformed external data */ }
   };
 
