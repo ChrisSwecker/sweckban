@@ -1609,8 +1609,8 @@
         const synced = window.__SWECKBAN_SYNCED !== false;
         setStatus(synced ? "Synced through iCloud" : "On this device only", synced);
         document.getElementById("storageNote").innerHTML = synced
-          ? "Every change writes straight to Sweckban's iCloud storage, so your boards stay in step with your Mac. Use <b>Export JSON</b> for a copy you can keep elsewhere."
-          : "Sweckban couldn't reach its iCloud storage, so your boards are saved on this device only and won't reach your Mac. Check that you're signed in to iCloud with iCloud Drive on, then reopen Sweckban. Use <b>Export JSON</b> to keep a copy in the meantime.";
+          ? "Every change writes straight to <b>sweckban-data.json</b> in Sweckban's own iCloud storage, so your boards stay in step with your Mac within seconds. That folder is private to the app and doesn't appear in Files \u2014 <b>Export JSON</b> is how you get a copy out, to save, mail or drop in another app."
+          : "Sweckban couldn't reach its iCloud storage, so your boards are saved on this device only and won't reach your Mac. Check that you're signed in to iCloud with iCloud Drive turned on, then reopen Sweckban. Until then, <b>Export JSON</b> is the way to get a copy off this device.";
         return;
       }
       const reveal = document.createElement("button");

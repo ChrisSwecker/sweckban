@@ -11,12 +11,15 @@
 		AD3ECA3D89AC7A3B770F5242 /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F29BB1A4716204FB5C7F6B /* WebViewController.swift */; };
 		282C867D0D864358FF515AF5 /* DataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB2056120BB3DADE4655383 /* DataStore.swift */; };
 		1D366593BCA4B9E4D0E3F99D /* sweckban.html in Resources */ = {isa = PBXBuildFile; fileRef = 4F9DA221C203D96D93349DF1 /* sweckban.html */; };
+		FB90684E69A6C96ED866993E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D713469F5B32ED43EDD0BC4A /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		7E724100B19911D7D39AAF16 /* SweckbanApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SweckbanApp.swift; sourceTree = "<group>"; };
 		D4F29BB1A4716204FB5C7F6B /* WebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewController.swift; sourceTree = "<group>"; };
 		CFB2056120BB3DADE4655383 /* DataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStore.swift; sourceTree = "<group>"; };
+		820301DA70B90E58F884DEB9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D713469F5B32ED43EDD0BC4A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		ED20F7D5B96A503D58430996 /* Sweckban.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sweckban.entitlements; sourceTree = "<group>"; };
 		4F9DA221C203D96D93349DF1 /* sweckban.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = sweckban.html; path = ../sweckban.html; sourceTree = "<group>"; };
 		F66147AE1CD3277801480CB5 /* Sweckban.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sweckban.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -48,6 +51,8 @@
 				7E724100B19911D7D39AAF16 /* SweckbanApp.swift */,
 				D4F29BB1A4716204FB5C7F6B /* WebViewController.swift */,
 				CFB2056120BB3DADE4655383 /* DataStore.swift */,
+				D713469F5B32ED43EDD0BC4A /* Assets.xcassets */,
+				820301DA70B90E58F884DEB9 /* Info.plist */,
 				ED20F7D5B96A503D58430996 /* Sweckban.entitlements */,
 			);
 			path = Sweckban;
@@ -119,6 +124,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB90684E69A6C96ED866993E /* Assets.xcassets in Resources */,
 				1D366593BCA4B9E4D0E3F99D /* sweckban.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -192,6 +198,7 @@
 		33458287172ED105FF9E2033 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sweckban/Sweckban.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -201,7 +208,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Sweckban;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = Sweckban/Info.plist;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -218,6 +225,7 @@
 		324651462CD9F4CB377E6AB1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sweckban/Sweckban.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -227,7 +235,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Sweckban;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = Sweckban/Info.plist;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

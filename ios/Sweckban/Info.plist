@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Everything else is synthesised from INFOPLIST_KEY_* build settings and merged in.
+	     This one key can't be: Xcode only exposes UILaunchScreen_Generation as a setting,
+	     with no way to name the colour, and the default launch screen is white — a hard
+	     flash before the dark board appears. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+</dict>
+</plist>
