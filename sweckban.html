@@ -3910,15 +3910,28 @@
   });
 
   // ---------- Undo / redo keybindings (Cmd+Z / Shift+Cmd+Z) ----------
+  // Shared by the page's own Cmd+Z handler and the iOS shell's UIKeyCommand. They differ in
+  // one respect: a keydown can be left alone for WebKit to handle natively, but a key command
+  // has already consumed the event, so there is nothing left to fall back to.
+  function boardUndoRedo(wantRedo, eventAlreadyConsumed) {
+    const t = document.activeElement;
+    // While typing, this is text undo, not board undo.
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+      if (eventAlreadyConsumed) document.execCommand(wantRedo ? "redo" : "undo");
+      return;
+    }
+    // Don't hijack undo while a modal / settings sheet is open
+    if (document.querySelector(".overlay.open")) return;
+    if (wantRedo) redo(); else undo();
+  }
+
   document.addEventListener("keydown", e => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
     const t = e.target;
-    // While typing, let the native text-field undo handle it, not the board
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-    // Don't hijack undo while a modal / settings sheet is open
     if (document.querySelector(".overlay.open")) return;
     e.preventDefault();
-    if (e.shiftKey) redo(); else undo();
+    boardUndoRedo(e.shiftKey, false);
   });
 
   // Let the native menu bar (Phase 5) drive board-level undo/redo
@@ -3970,6 +3983,12 @@
       case "toggleFitWidth": fitWidthToggle.checked = !fitWidthToggle.checked; fitWidthToggle.dispatchEvent(new Event("change")); break;
       case "nextBoard":      switchBoard(1); break;
       case "prevBoard":      switchBoard(-1); break;
+      // These three exist for the iOS shell's hardware-keyboard commands. On the Mac the
+      // page's own keydown listeners catch them; on iPadOS the chord is consumed by UIKit
+      // before the page ever sees it, so the shell has to hand them over explicitly.
+      case "search":         searchInput.focus(); searchInput.select(); break;
+      case "undo":           boardUndoRedo(false, true); break;
+      case "redo":           boardUndoRedo(true, true); break;
     }
   };
 

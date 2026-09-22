@@ -255,9 +255,21 @@ created conflict version is merged and cleared.
       `padding: env(safe-area-inset-*)` on the app frame. Do **not** disable user zoom
       with `maximum-scale`; use `touch-action: manipulation` on the body to kill
       double-tap zoom instead.
-- [ ] Hardware keyboard on iPad: the existing shortcuts (⌘F search, ⌘Z undo, ⌘, settings)
-      already work through the web layer. Add `UIKeyCommand`s only for things the web
-      layer can't see (nothing, probably).
+- [x] Hardware keyboard on iPad. **The assumption here was wrong**: none of the shortcuts
+      worked through the web layer. The page listens for `keydown` with `metaKey`, which is
+      all the Mac needs, but iPadOS routes Command chords through the responder chain as
+      `UIKeyCommand`s and they never reach web content unless the page holds focus — so
+      every shortcut silently did nothing. Fixed by registering 13 `UIKeyCommand`s in the
+      shell and forwarding them through the same `__sweckbanMenu` bridge the Mac menu bar
+      uses, with `search`/`undo`/`redo` added to that switch. All verified on the device.
+      `wantsPriorityOverSystemBehavior` is required or the system keeps some for itself,
+      which makes ⌘Z the delicate one: it has to hand text undo back, via
+      `document.execCommand` when a field has focus (verified — typing then ⌘Z undoes the
+      typing, not the board).
+      **Known gap:** holding ⌘ does not raise the iPadOS shortcut overlay, with both `title`
+      and `discoverabilityTitle` set. That appears to need the full `UIMenuBuilder` menu
+      system — disproportionate machinery for a discoverability HUD. The shortcuts work;
+      they just don't announce themselves.
 - [x] Undo/redo affordance without a menu bar: a small toolbar in the web UI when
       `__SWECKBAN_PLATFORM === "ios"`, or support shake-to-undo by forwarding
       `motionEnded` to `__sweckbanUndo`. Toolbar is more discoverable.

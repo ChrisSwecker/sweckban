@@ -71,6 +71,65 @@ final class WebViewController: UIViewController, WKScriptMessageHandler, WKNavig
         DataFileWatcher.shared.start(fileURL)
     }
 
+    // Key commands are only consulted for responders in the chain, and with nothing focused
+    // the web view isn't one.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    // ---------- Hardware keyboard (iPad) ----------
+    // The page listens for keydown with metaKey, which is all the Mac needs. iPadOS doesn't
+    // work that way: it routes Command chords through the responder chain as UIKeyCommands,
+    // and they never reach the web content as a keydown unless the page happens to hold
+    // focus — so every shortcut silently did nothing. Hand them over through the same
+    // __sweckbanMenu bridge the Mac menu bar uses, rather than teaching the page a second
+    // input mechanism.
+    override var canBecomeFirstResponder: Bool { true }
+
+    private static let shortcuts: [(input: String, mods: UIKeyModifierFlags, action: String, title: String)] = [
+        ("f", .command,                  "search",         "Search Cards"),
+        (",", .command,                  "settings",       "Settings"),
+        ("n", .command,                  "newCard",        "New Card"),
+        ("n", [.command, .shift],        "newBoard",       "New Board"),
+        ("n", [.command, .alternate],    "newPlanner",     "New Planner"),
+        ("e", .command,                  "export",         "Export JSON"),
+        ("i", .command,                  "import",         "Import JSON"),
+        ("z", .command,                  "undo",           "Undo"),
+        ("z", [.command, .shift],        "redo",           "Redo"),
+        ("s", [.command, .alternate],    "toggleSidebar",  "Toggle Sidebar"),
+        ("l", [.command, .alternate],    "toggleTheme",    "Toggle Light / Dark"),
+        ("]", [.command, .shift],        "nextBoard",      "Next Board"),
+        ("[", [.command, .shift],        "prevBoard",      "Previous Board"),
+    ]
+
+    override var keyCommands: [UIKeyCommand]? {
+        Self.shortcuts.map { s in
+            // propertyList is get-only in Swift, so it has to be set at init.
+            let c = UIKeyCommand(title: s.title,
+                                 image: nil,
+                                 action: #selector(handleKeyCommand(_:)),
+                                 input: s.input,
+                                 modifierFlags: s.mods,
+                                 propertyList: s.action)
+            // Without this the system keeps some of these for itself and the app never sees
+            // them. Cmd+Z is the one that matters: the page falls back to document
+            // execCommand when a text field has focus, so taking priority doesn't cost you
+            // undo while typing.
+            c.wantsPriorityOverSystemBehavior = true
+            // `title` feeds the menu system; the hold-Command overlay reads this one, which
+            // defaults to nil — set both or the shortcuts work but never announce themselves.
+            c.discoverabilityTitle = s.title
+            return c
+        }
+    }
+
+    @objc private func handleKeyCommand(_ cmd: UIKeyCommand) {
+        guard let action = cmd.propertyList as? String else { return }
+        webView?.evaluateJavaScript("window.__sweckbanMenu && window.__sweckbanMenu('\(action)')",
+                                    completionHandler: nil)
+    }
+
     // ---------- Navigation lockdown ----------
     // Only the bundled page may ever be shown. Left alone, WKWebView will navigate to any
     // link tapped inside it — and that page would inherit the `sweckban` message handler,
