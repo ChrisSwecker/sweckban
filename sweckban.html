@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sweck/ban — Kanban &amp; Planner</title>
 <style>
   :root {
@@ -47,13 +47,19 @@
     font-family: var(--sans);
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
+    /* Kills the double-tap-to-zoom delay on touch without disabling pinch zoom. */
+    touch-action: manipulation;
   }
   .frame {
     height: 100vh;
+    height: 100dvh;          /* iOS: the toolbar-aware height, not the static one */
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
+  /* The web view runs edge to edge (viewport-fit=cover), so the page owns its insets.
+     env() is 0 everywhere else, so the header and board rules below need no platform
+     check — see `header` and `main`. */
 
   /* ---------- Header ---------- */
   header {
@@ -61,7 +67,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 20px;
+    padding: calc(12px + env(safe-area-inset-top)) 20px 12px;
     border-bottom: 1px solid var(--hairline);
     flex-wrap: wrap;
     background: var(--sidebar);
@@ -129,7 +135,7 @@
     text-align: left; box-shadow: none;
     color: var(--dim);
   }
-  .pane-toggle:hover { color: var(--ink); }
+  @media (hover: hover) { .pane-toggle:hover { color: var(--ink); } }
   .pane-toggle .disclosure {
     color: var(--dim);
     transform: rotate(90deg);
@@ -146,7 +152,7 @@
     font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--dim);
     border-radius: 4px; transition: background-color .1s, color .1s;
   }
-  .seg-btn:hover { color: var(--ink); }
+  @media (hover: hover) { .seg-btn:hover { color: var(--ink); } }
   .seg-btn.on { background: var(--accent); color: #fff; }
 
   .board-list { display: flex; flex-direction: column; gap: 1px; }
@@ -162,7 +168,7 @@
     font-size: 13px;
     transition: background-color .1s;
   }
-  .board-item:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .board-item:hover { background: var(--surface-hover); } }
   .board-item.active { background: var(--accent); color: var(--accent-ink); }
   .board-item.active .count { color: rgba(255,255,255,0.75); }
   .board-item.active .del { color: rgba(255,255,255,0.75); }
@@ -172,10 +178,10 @@
     font-size: 15px; cursor: pointer;
     padding: 0 2px; line-height: 1;
   }
-  .board-item .del:hover { color: var(--ink); }
-  .board-item.active .del:hover { color: #fff; }
+  @media (hover: hover) { .board-item .del:hover { color: var(--ink); } }
+  @media (hover: hover) { .board-item.active .del:hover { color: #fff; } }
 
-  input[type="text"], textarea, input[type="date"] {
+  input[type="text"], textarea, input[type="date"], select {
     width: 100%;
     background: var(--surface);
     color: var(--ink);
@@ -187,11 +193,21 @@
     outline: none;
     transition: box-shadow .12s, border-color .12s;
   }
-  input[type="text"]:focus, textarea:focus, input[type="date"]:focus {
+  input[type="text"]:focus, textarea:focus, input[type="date"]:focus, select:focus {
     border-color: var(--accent);
     box-shadow: var(--focus-ring);
   }
   input[type="date"] { font-size: 13px; }
+  /* Native selects ignore the border-radius/background above unless appearance is reset,
+     and iOS renders its own chevron, so leave room for it. */
+  select {
+    -webkit-appearance: none; appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238b8b93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  @media (pointer: coarse) { select { padding-top: 11px; padding-bottom: 11px; } }
   textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
 
   .btn {
@@ -208,10 +224,10 @@
     box-shadow: var(--shadow-card);
     transition: background-color .1s, border-color .1s;
   }
-  .btn:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .btn:hover { background: var(--surface-hover); } }
   .btn:focus-visible { box-shadow: var(--focus-ring); }
   .btn:not(.subtle) { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn:not(.subtle):hover { filter: brightness(1.08); }
+  @media (hover: hover) { .btn:not(.subtle):hover { filter: brightness(1.08); } }
   .btn.subtle { color: var(--ink); }
   .btn.subtle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -234,7 +250,7 @@
     padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius-sm);
     cursor: pointer; font-size: 12.5px; transition: background-color .1s;
   }
-  .person-row:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .person-row:hover { background: var(--surface-hover); } }
   .person-row.filtering { background: var(--accent); color: var(--accent-ink); }
   .person-row .handle { font-size: 11px; color: var(--dim); }
   .person-row.filtering .handle { color: rgba(255,255,255,0.75); }
@@ -244,8 +260,8 @@
     background: none; border: none; color: var(--dim);
     font-size: 15px; cursor: pointer; padding: 0 2px; line-height: 1;
   }
-  .person-row .del:hover { color: var(--ink); }
-  .person-row.filtering .del:hover { color: #fff; }
+  @media (hover: hover) { .person-row .del:hover { color: var(--ink); } }
+  @media (hover: hover) { .person-row.filtering .del:hover { color: #fff; } }
   .people-hint { font-size: 10.5px; color: var(--dim); margin-top: 8px; line-height: 1.6; padding: 0 6px; }
   .pdot {
     width: 12px; height: 12px; border-radius: 50%;
@@ -257,7 +273,7 @@
     width: 22px; height: 22px; border-radius: 50%;
     border: 1px solid transparent; cursor: pointer; opacity: .85; padding: 0;
   }
-  .cp-swatch:hover { opacity: 1; }
+  @media (hover: hover) { .cp-swatch:hover { opacity: 1; } }
   .cp-swatch.on { border-color: var(--ink); opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
   .color-pop {
     position: fixed; z-index: 25; display: none;
@@ -339,7 +355,8 @@
   main {
     flex: 1;
     min-height: 0;
-    padding: 18px 20px;
+    padding: 18px calc(20px + env(safe-area-inset-right))
+             calc(18px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
     overflow-x: auto;
     overflow-y: hidden;
     display: flex;
@@ -373,7 +390,7 @@
   }
   .dept-name { color: var(--ink); }
   .dept-del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
-  .dept-del:hover { color: var(--ink); }
+  @media (hover: hover) { .dept-del:hover { color: var(--ink); } }
   .dept-add { display: inline-flex; align-items: center; gap: 4px; }
   .dept-add input { width: 130px; padding: 4px 8px; font-size: 12px; }
   .planner-grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
@@ -408,7 +425,7 @@
     background: var(--sidebar); border-right: 1px solid var(--hairline);
     display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 46px; cursor: pointer;
   }
-  .pl-name:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .pl-name:hover { background: var(--surface-hover); } }
   .pl-name-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
   .pl-name-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl-track { position: relative; flex: none; height: 46px; }
@@ -417,7 +434,7 @@
     display: flex; align-items: center; overflow: hidden; box-shadow: var(--shadow-card); min-width: 4px;
     user-select: none; touch-action: none;  /* bar drag owns the touch, not page scroll */
   }
-  .pl-bar:hover { filter: brightness(1.08); }
+  @media (hover: hover) { .pl-bar:hover { filter: brightness(1.08); } }
   .pl-bar-label { font-size: 11px; color: #fff; padding: 0 9px; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,0.35); pointer-events: none; }
   .pl-bar-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 2; }
   .pl-bar-handle.l { left: 0; }
@@ -494,7 +511,7 @@
     cursor: pointer; padding: 0; line-height: 1; flex: none;
     display: inline-flex; align-items: center;
   }
-  .list-collapse:hover { color: var(--ink); }
+  @media (hover: hover) { .list-collapse:hover { color: var(--ink); } }
   .list-collapse .chev { transition: transform .15s ease; }
   .list.collapsed .list-collapse .chev { transform: rotate(180deg); }
 
@@ -529,7 +546,7 @@
     background: none; border: none; color: var(--dim);
     font-size: 15px; cursor: pointer; line-height: 1;
   }
-  .list-del:hover { color: var(--ink); }
+  @media (hover: hover) { .list-del:hover { color: var(--ink); } }
 
   .cards {
     padding: 8px;
@@ -540,6 +557,15 @@
     min-height: 24px;
     flex: 1;
   }
+  .drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.92;
+    transform: rotate(1.5deg);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  }
+  .list.dragging { opacity: 0.35; }
   .card {
     border: 1px solid var(--hairline);
     border-radius: var(--radius-sm);
@@ -549,8 +575,14 @@
     box-shadow: var(--shadow-card);
     transition: box-shadow .12s, transform .12s;
   }
-  .card:hover { box-shadow: 0 0 0 1px var(--accent); }
+  @media (hover: hover) { .card:hover { box-shadow: 0 0 0 1px var(--accent); } }
   .card.dragging { opacity: 0.35; }
+  /* The pointer drag owns the gesture, so a drag across a card mustn't select its text —
+     and on touch the long press that arms it must not raise the iOS callout menu. */
+  .card, .list-header {
+    user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   .card-title { font-size: 13px; line-height: 1.4; word-wrap: break-word; }
   .card-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .card-meta:empty { display: none; }
@@ -566,6 +598,37 @@
   .due.overdue { color: #fff; background: #FF453A; border-color: #FF453A; }
   .has-desc { font-size: 11px; color: var(--dim); }
   .drop-indicator { height: 2px; background: var(--accent); border-radius: 2px; }
+
+  /* ---------- Touch hit targets ----------
+     Fingers need ~44px; the mouse layout is deliberately tighter, so none of this applies
+     to a fine pointer. Where a control has to stay visually small (the planner's 8px bar
+     handles, the 12px milestone diamonds) the VISUAL size is kept and only the hit area
+     grows, via a transparent ::after — a pseudo-element never becomes the event target, so
+     the existing hit-testing in attachBarDrag still sees the handle itself. */
+  @media (pointer: coarse) {
+    /* iOS zooms the page in when you focus a control whose text is under 16px — 13px
+       fields gave a 1.23x zoom, which left the layout correct but the right-hand side of
+       every field off-screen. The alternative fix, maximum-scale=1, would disable pinch
+       zoom for everyone, so raise the type instead: it is better under a finger anyway. */
+    input[type="text"], input[type="date"], input[type="search"], textarea, select {
+      font-size: 16px;
+    }
+    #searchInput, .add-card-input { font-size: 16px; }
+    .card { padding: 12px; }
+    .list-header { padding: 14px 12px; }
+    .add-card-input { padding: 11px 10px; }
+    .list-collapse, .list-del, .board-item .del, .person-row .del, .dept-del {
+      min-width: 32px; min-height: 32px;
+    }
+    .pl-bar-handle { width: 12px; }
+    .pl-bar-handle::after {
+      content: ""; position: absolute; top: -10px; bottom: -10px; left: -10px; right: -10px;
+    }
+    .pl-ms-diamond::after {
+      content: ""; position: absolute; top: -8px; bottom: -8px; left: -8px; right: -8px;
+    }
+    .pl-ms-diamond { position: relative; }
+  }
 
   .list-footer { padding: 8px; border-top: 1px solid var(--hairline); }
   .add-card-input { font-size: 12.5px; padding: 6px 9px; }
@@ -620,7 +683,7 @@
     opacity: 0.45;
     transition: opacity .12s;
   }
-  .label-swatch:hover { opacity: 0.8; }
+  @media (hover: hover) { .label-swatch:hover { opacity: 0.8; } }
   .label-swatch.on { opacity: 1; box-shadow: 0 0 0 2px var(--ink); }
   .two-col { display: flex; gap: 12px; }
   .two-col > .field { flex: 1; }
@@ -647,7 +710,7 @@
     display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; cursor: pointer;
     text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0; color: var(--ink);
   }
-  .assignee-row:hover { background: var(--surface-hover); }
+  @media (hover: hover) { .assignee-row:hover { background: var(--surface-hover); } }
   .assignee-row input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: none; }
   .assignee-name { font-size: 13px; color: var(--ink); text-transform: none; letter-spacing: normal; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .modal-footer { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--hairline); padding-top: 14px; }
@@ -708,13 +771,100 @@
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); background-clip: padding-box; }
+  @media (hover: hover) { ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); background-clip: padding-box; } }
 
   @media (max-width: 860px) {
     .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     aside { border-right: none; border-bottom: 1px solid var(--hairline); max-height: 40vh; }
     main { overflow-y: auto; }
   }
+  /* ---------- Phone ----------
+     Under this width there is no room for a sidebar column beside a board, and columns
+     sized for a mouse are wider than the screen. Keep the breakpoint in step with
+     PHONE_MQ in the script. The scrim is inert above it, so it is declared here only. */
+  .sidebar-scrim { display: none; }
+
+  @media (max-width: 600px) {
+    /* Header: the tagline is the first thing to go, then the search field narrows. */
+    header { gap: 8px; padding-left: 12px; padding-right: 12px; }
+    .tagline { display: none; }
+    /* Brand and controls each take a full row — squeezed onto one row there is nothing
+       left for the search field but an ellipsis. On its own row it can have the slack. */
+    .header-left, header > span { flex: 1 1 100%; }
+    .search-box { flex: 1; min-width: 0; }
+    #searchInput, #searchInput:focus { width: 100%; }
+
+    /* The sidebar leaves the grid and becomes a slide-over sheet. `sidebar-collapsed`
+       still means "not on screen", so the existing toggle button needs no special case.
+       z-index sits below .overlay (10) so a modal still covers the sheet. */
+    .layout { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    aside {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: min(84vw, 320px);
+      max-height: none;
+      z-index: 8;
+      overflow-y: auto;
+      border-right: 1px solid var(--hairline);
+      border-bottom: none;
+      transform: translateX(0);
+      transition: transform .22s ease;
+      /* Add to the base 16px/14px rather than replacing it — the insets are 0 in portrait,
+         which would leave the fields flush against the edge of the screen. */
+      padding-top: calc(16px + env(safe-area-inset-top));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+      padding-left: calc(14px + env(safe-area-inset-left));
+    }
+    /* Beats `.layout.sidebar-collapsed aside { display: none }` on source order. */
+    .layout.sidebar-collapsed aside { display: block; transform: translateX(-101%); }
+    .sidebar-scrim {
+      display: block;
+      position: fixed; inset: 0; z-index: 7;
+      background: rgba(0, 0, 0, 0.5);
+      transition: opacity .22s ease;
+    }
+    .layout.sidebar-collapsed .sidebar-scrim { opacity: 0; pointer-events: none; }
+
+    /* One column at a time, snapped. The DOM is unchanged — this is only sizing.
+       `main.fixed-width .list` is more specific than `main .list`, so it has to be named
+       here too or the 270px fixed-width rule would win whatever the source order. */
+    main {
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      gap: 10px;
+    }
+    main .list, main.fixed-width .list {
+      flex: 0 0 88vw;
+      min-width: 88vw;
+      max-width: 88vw;
+      scroll-snap-align: center;
+    }
+    main .list.collapsed, main.fixed-width .list.collapsed {
+      flex: 0 0 44px; min-width: 44px; max-width: 44px;
+    }
+    /* A drag drives main.scrollLeft itself; mandatory snapping fights it back to the
+       nearest column, so suspend snapping for the duration. */
+    body.pl-dragging main { scroll-snap-type: none; }
+
+    /* Modals go full-screen: milestone rows and assignee checklists need the room, and a
+       centred card with 60px of padding wastes most of a phone. */
+    .overlay { padding: 0; align-items: stretch; }
+    .modal {
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100%;
+      border: none;
+      border-radius: 0;
+      padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* Planner: month zoom and the narrow name column are forced in the script (plZoom,
+       plNameW); this is just the type scale that goes with them. */
+    .pl-name-text { font-size: 12px; }
+    .pl-ms-label { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -917,6 +1067,10 @@
       <input type="text" id="mTitle" maxlength="200">
     </div>
     <div class="field">
+      <label for="mList">List</label>
+      <select id="mList"></select>
+    </div>
+    <div class="field">
       <label for="mDesc">Description</label>
       <textarea id="mDesc" placeholder="Notes, links, context…"></textarea>
     </div>
@@ -1018,6 +1172,39 @@
   // Native bridge: present when running inside the Sweckban.app WKWebView wrapper
   const NATIVE = !!(window.__SWECKBAN_NATIVE && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sweckban);
   const nativePost = (msg) => { try { window.webkit.messageHandlers.sweckban.postMessage(msg); } catch (e) {} };
+  // Which shell is hosting us. Only the storage affordances in Settings branch on this —
+  // one HTML file serves both platforms, so resist adding more.
+  const PLATFORM = window.__SWECKBAN_PLATFORM === "ios" ? "ios" : "macos";
+
+  // ---------- Phone layout ----------
+  // The board assumes a sidebar plus room for several columns; under this width it gets
+  // neither. Width, not platform: a narrow window on the Mac has the same problem, and an
+  // iPad in a half-width Split View is a phone as far as the layout is concerned. The CSS
+  // uses the same 600px breakpoint — keep the two in step.
+  const PHONE_MQ = window.matchMedia("(max-width: 600px)");
+  const isPhone = () => PHONE_MQ.matches;
+
+  // ---------- Which board is on screen (device-local) ----------
+  // This used to live in the synced file, so opening a different board on the Mac nudged
+  // every other device to follow — harmless with one device, irritating with a phone in
+  // your pocket. It is view state, not data: it belongs to the device, not the file.
+  const ACTIVE_BOARD_KEY = "sweckban.activeBoard";
+  let activeBoardId = (() => {
+    try { return localStorage.getItem(ACTIVE_BOARD_KEY) || null; } catch (e) { return null; }
+  })();
+  function setActiveBoard(id) {
+    activeBoardId = id || null;
+    try {
+      if (activeBoardId) localStorage.setItem(ACTIVE_BOARD_KEY, activeBoardId);
+      else localStorage.removeItem(ACTIVE_BOARD_KEY);
+    } catch (e) { /* storage blocked: the board just resets on next launch */ }
+  }
+  // Run after anything that can remove the open board out from under us — a delete, an
+  // import, a merge, an undo — so the id on record always names a board that exists.
+  function ensureActiveBoard() {
+    if (!state.boards || !state.boards.length) { setActiveBoard(null); return; }
+    if (!state.boards.find(b => b.id === activeBoardId)) setActiveBoard(state.boards[0].id);
+  }
 
   // ---------- State ----------
   let state = load();
@@ -1054,7 +1241,6 @@
   function seed() {
     const boardId = uid();
     return {
-      activeBoard: boardId,
       boards: [{
         id: boardId,
         name: "First Board",
@@ -1160,7 +1346,7 @@
     committed = undoStack.pop();
     state = JSON.parse(committed);
     stampChanges(before);
-    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
+    ensureActiveBoard();
     persistState(); renderAll();
   }
   function redo() {
@@ -1170,7 +1356,7 @@
     committed = redoStack.pop();
     state = JSON.parse(committed);
     stampChanges(before);
-    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0] && state.boards[0].id;
+    ensureActiveBoard();
     persistState(); renderAll();
   }
 
@@ -1277,29 +1463,27 @@
     return out;
   }
 
-  // Both arguments are whole state objects. activeBoard is deliberately not merged —
-  // which board is on screen is this device's business, not shared data.
+  // Both arguments are whole state objects. Which board is on screen is not in here at
+  // all: it is device-local now, kept in localStorage by the app around this block.
   function mergeStates(mine, theirs) {
     const tombs = mergeTombstones(mine.tombstones, theirs.tombstones);
     const latest = s => (s.boards || []).reduce((m, b) => Math.max(m, mergeTs(b)), 0);
     const orderFromMine = latest(mine) >= latest(theirs);
     const out = {
       schema: Math.max(Number(mine.schema) || 1, Number(theirs.schema) || 1),
-      activeBoard: mine.activeBoard,
       boards: mergeById(mine.boards, theirs.boards, tombs,
                         (a, b) => mergeBoard(a, b, tombs), orderFromMine),
       people: mergeById(mine.people, theirs.people, tombs, pickNewer, orderFromMine),
       departments: mergeById(mine.departments, theirs.departments, tombs, pickNewer, orderFromMine),
       tombstones: tombs,
     };
-    if (!out.boards.find(b => b.id === out.activeBoard)) {
-      out.activeBoard = out.boards[0] ? out.boards[0].id : null;
-    }
     return out;
   }
 
   // Key-order-insensitive comparison, so a merge that changed nothing isn't written back
-  // and bounced to every other device. activeBoard is excluded as device-local.
+  // and bounced to every other device. activeBoard no longer belongs in the file, but a
+  // file written by an older build still has one — ignoring it keeps that from reading as
+  // a change and starting a write-back volley between the two versions.
   function sameData(a, b) {
     const canon = v => JSON.stringify(v, (k, val) =>
       k === "activeBoard" ? undefined
@@ -1355,7 +1539,7 @@
     const next = merge ? mergeStates(state, parsed) : parsed;
     state = next.boards.length ? next : parsed;
     if (!state.boards.length) state = seed();
-    if (!state.boards.find(b => b.id === state.activeBoard)) state.activeBoard = state.boards[0].id;
+    ensureActiveBoard();
     return true;
   }
 
@@ -1415,7 +1599,20 @@
   async function initSaveFile() {
     if (NATIVE) {
       // Native wrapper owns persistence — swap the file-picker UI for a status line + Finder reveal
-      document.getElementById("fileButtons").innerHTML = "";
+      const buttons = document.getElementById("fileButtons");
+      buttons.innerHTML = "";
+      if (PLATFORM === "ios") {
+        // No Finder, and no user-visible file system to point at. Don't claim iCloud when
+        // the shell couldn't reach the container (signed out, iCloud Drive off, simulator)
+        // — it still works, it just isn't syncing, and the user should know which.
+        buttons.style.display = "none";
+        const synced = window.__SWECKBAN_SYNCED !== false;
+        setStatus(synced ? "Synced through iCloud" : "On this device only", synced);
+        document.getElementById("storageNote").innerHTML = synced
+          ? "Every change writes straight to <b>sweckban-data.json</b> in Sweckban's own iCloud storage, so your boards stay in step with your Mac within seconds. That folder is private to the app and doesn't appear in Files \u2014 <b>Export JSON</b> is how you get a copy out, to save, mail or drop in another app."
+          : "Sweckban couldn't reach its iCloud storage, so your boards are saved on this device only and won't reach your Mac. Check that you're signed in to iCloud with iCloud Drive turned on, then reopen Sweckban. Until then, <b>Export JSON</b> is the way to get a copy off this device.";
+        return;
+      }
       const reveal = document.createElement("button");
       reveal.className = "btn subtle";
       reveal.textContent = "Reveal in Finder";
@@ -1424,7 +1621,7 @@
       move.className = "btn subtle";
       move.textContent = "Change Location\u2026";
       move.addEventListener("click", () => nativePost({ cmd: "changeLocation" }));
-      document.getElementById("fileButtons").append(reveal, move);
+      buttons.append(reveal, move);
       const p = window.__SWECKBAN_DATA_PATH || "sweckban-data.json";
       setStatus(`Native app — saving to ${p}`, true);
       document.getElementById("storageNote").innerHTML =
@@ -1492,7 +1689,7 @@
     });
   }
 
-  const activeBoard = () => state.boards.find(b => b.id === state.activeBoard) || state.boards[0];
+  const activeBoard = () => state.boards.find(b => b.id === activeBoardId) || state.boards[0];
 
   // ---------- People / mentions ----------
   const HANDLE_RE = /@([a-zA-Z0-9_.-]+)/g;
@@ -1518,6 +1715,14 @@
 
   function normalize() {
     state.schema = SCHEMA;
+    // The open board used to be stored in the file. Adopt it the first time we meet such a
+    // file so the upgrade doesn't yank the user to a different board, then drop the key so
+    // it stops being written back out. Files from an older build stay readable either way.
+    if ("activeBoard" in state) {
+      if (!activeBoardId && state.activeBoard) setActiveBoard(state.activeBoard);
+      delete state.activeBoard;
+    }
+    ensureActiveBoard();
     if (!state.tombstones || typeof state.tombstones !== "object") state.tombstones = {};
     const now = Date.now();
     for (const id in state.tombstones) if (now - state.tombstones[id] > TOMBSTONE_TTL) delete state.tombstones[id];
@@ -1670,14 +1875,26 @@
         const n = document.createElement("span");
         n.className = "ac-name"; n.textContent = p.name + (p.isDept ? " · dept" : "");
         row.append(h, n);
-        row.addEventListener("mousedown", ev => { ev.preventDefault(); pick(i); });
+        const choose = ev => { ev.preventDefault(); pick(i); };
+        row.addEventListener("mousedown", choose);
+        // On touch the input blurs before a synthesized mousedown ever lands, which closes
+        // the popover out from under the tap. Take the touch directly instead.
+        row.addEventListener("touchstart", choose, { passive: false });
         b.appendChild(row);
       });
       const r = target.getBoundingClientRect();
       b.style.left = r.left + "px";
-      b.style.top = (r.bottom + 4) + "px";
       b.style.minWidth = r.width + "px";
       b.style.display = "block";
+      // The on-screen keyboard covers the bottom of the window, and visualViewport is the
+      // only thing that knows where it ends. Sitting below the input is the default; flip
+      // above when that would put the list under the keyboard (or off-screen) and there is
+      // room up top. Measure after display:block or offsetHeight is 0.
+      const vv = window.visualViewport;
+      const bottomLimit = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const h = b.offsetHeight;
+      const below = r.bottom + 4;
+      b.style.top = (below + h > bottomLimit && r.top - 4 - h > 0 ? r.top - 4 - h : below) + "px";
     }
 
     function pick(i) {
@@ -2013,7 +2230,7 @@
     boardListEl.innerHTML = "";
     state.boards.forEach(b => {
       const item = document.createElement("div");
-      item.className = "board-item" + (b.id === state.activeBoard ? " active" : "");
+      item.className = "board-item" + (b.id === activeBoardId ? " active" : "");
       const isPlanner = b.type === "planner";
       const cardCount = isPlanner
         ? (b.tasks || []).filter(t => !t.archived).length
@@ -2050,15 +2267,16 @@
         tombBoard(b);
         state.boards = state.boards.filter(x => x.id !== b.id);
         if (state.boards.length === 0) { const t = state.tombstones; state = seed(); state.tombstones = t; }
-        else if (state.activeBoard === b.id) state.activeBoard = state.boards[0].id;
+        ensureActiveBoard();
         save(); renderAll();
       });
 
       right.append(count, del);
       item.append(icon, name, right);
       item.addEventListener("click", () => {
-        state.activeBoard = b.id;
-        save(); renderAll();
+        setActiveBoard(b.id);
+        if (isPhone()) setSidebarCollapsed(true);  // you picked a board; show it
+        renderAll();   // view state only — nothing to save, nothing to sync
       });
       boardListEl.appendChild(item);
     });
@@ -2088,7 +2306,7 @@
       ? { id: uid(), name, type: "planner", tasks: [] }
       : { id: uid(), name, type: "kanban", lists: [] };
     state.boards.push(b);
-    state.activeBoard = b.id;
+    setActiveBoard(b.id);
     input.value = "";
     save(); renderAll();
   }
@@ -2096,7 +2314,176 @@
   // ---------- Board / lists / cards ----------
   const boardEl = document.getElementById("board");
   const boardwrapEl = document.querySelector(".boardwrap");
-  let drag = null; // { type: 'card'|'list', cardId, fromListId, listId }
+  // ---------- Card / list drag (pointer events) ----------
+  // Cards and list headers used HTML5 drag-and-drop, which doesn't exist on iPhone and is
+  // awkward on iPad. Pointer events cover mouse, pen and touch from one code path — the
+  // planner bars already work this way (see attachBarDrag).
+  //
+  // Mouse and pen arm as soon as the pointer moves past DRAG_SLOP; anything less is a
+  // click, so clicking a card still opens it.
+  //
+  // Touch can't work that way. A column scrolls vertically (.cards) and the board scrolls
+  // horizontally (main), and a finger starting on a card is far more often scrolling than
+  // dragging. `touch-action: none` would settle it in the drag's favour and cost us
+  // scrolling entirely — and it can't be flipped mid-gesture, because the browser latches
+  // it when the gesture begins. So touch arms on a long press instead: hold still for
+  // TOUCH_HOLD_MS and the drag takes over. Because the finger hasn't moved, no scroll is
+  // in flight, which is exactly the condition under which preventDefault() on a
+  // non-passive touchmove still suppresses one (see armTouchScrollBlock).
+  const DRAG_SLOP = 3;         // mouse/pen: past this it's a drag
+  const TOUCH_SLOP = 10;       // finger: move this far before the hold fires and it's a scroll
+  const TOUCH_HOLD_MS = 450;   // tune on hardware — see docs/ios-plan.md
+  let dragGhost = null;
+
+  // Once a touch drag is armed the browser must stop scrolling for us. touch-action is
+  // already latched by now, so the only lever left is preventDefault on a non-passive
+  // touchmove — which works precisely because the long press guaranteed no scroll started.
+  function armTouchScrollBlock() {
+    const block = ev => ev.preventDefault();
+    document.addEventListener("touchmove", block, { passive: false });
+    return () => document.removeEventListener("touchmove", block, { passive: false });
+  }
+
+  // While we own the gesture the browser won't scroll either axis, so a card can't reach a
+  // list that's off-screen or a position below the fold unless we drive the scrolling
+  // ourselves. Runs off rAF from the last known pointer position.
+  const EDGE = 60;             // px from an edge where auto-scroll kicks in
+  const EDGE_MAX = 18;         // px per frame at the very edge
+  const autoScroll = (() => {
+    let raf = null, x = 0, y = 0;
+    const speed = (dist) => Math.ceil((1 - Math.max(0, dist) / EDGE) * EDGE_MAX);
+    function step() {
+      const boardEl = document.querySelector("main");
+      if (boardEl) {
+        const r = boardEl.getBoundingClientRect();
+        if (x - r.left < EDGE) boardEl.scrollLeft -= speed(x - r.left);
+        else if (r.right - x < EDGE) boardEl.scrollLeft += speed(r.right - x);
+      }
+      // Vertical scrolling belongs to whichever column the finger is over.
+      const over = document.elementFromPoint(x, y);
+      const cards = over && over.closest(".list") && over.closest(".list").querySelector(".cards");
+      if (cards && cards.scrollHeight > cards.clientHeight) {
+        const r = cards.getBoundingClientRect();
+        if (y - r.top < EDGE) cards.scrollTop -= speed(y - r.top);
+        else if (r.bottom - y < EDGE) cards.scrollTop += speed(r.bottom - y);
+      }
+      raf = requestAnimationFrame(step);
+    }
+    return {
+      track(ev) { x = ev.clientX; y = ev.clientY; if (raf === null) raf = requestAnimationFrame(step); },
+      stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; }
+    };
+  })();
+
+  // A drag that ends over a card, a list title or a delete button would otherwise fire
+  // that element's click as well. Swallow exactly one click, in the capture phase so it
+  // never reaches any handler.
+  function swallowNextClick() {
+    const kill = ev => {
+      ev.stopPropagation(); ev.preventDefault();
+      document.removeEventListener("click", kill, true);
+    };
+    document.addEventListener("click", kill, true);
+    // No click follows a drag that ended off-window; don't leave the trap armed.
+    setTimeout(() => document.removeEventListener("click", kill, true), 250);
+  }
+
+  // Wires one pointer gesture. onStart fires once, when the drag arms — on movement for
+  // mouse and pen, on a long press for touch. onDrop receives the final event, or null if
+  // the OS took the gesture away (pointercancel).
+  function pointerDrag(e, { onStart, onMove, onDrop }) {
+    if (e.button !== 0) return;   // touch and pen report button 0 too
+    const touch = e.pointerType === "touch";
+    const pid = e.pointerId, startX = e.clientX, startY = e.clientY;
+    let armed = false, holdTimer = null, releaseScroll = null, last = e;
+
+    const arm = ev => {
+      armed = true;
+      holdTimer = null;
+      if (touch) releaseScroll = armTouchScrollBlock();
+      onStart(ev);
+      onMove(ev);
+      autoScroll.track(ev);
+    };
+
+    const cancelHold = () => {
+      if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+    };
+
+    const move = ev => {
+      if (ev.pointerId !== pid) return;
+      last = ev;
+      const dx = Math.abs(ev.clientX - startX), dy = Math.abs(ev.clientY - startY);
+      if (!armed) {
+        if (touch) {
+          // Moved before the hold fired: the finger is scrolling. Stand down and leave the
+          // gesture to the browser — we never called preventDefault, so it still owns it.
+          if (dx > TOUCH_SLOP || dy > TOUCH_SLOP) { cancelHold(); finish(null, true); }
+          return;
+        }
+        if (dx <= DRAG_SLOP && dy <= DRAG_SLOP) return;
+        arm(ev);
+        return;
+      }
+      onMove(ev);
+      autoScroll.track(ev);
+    };
+
+    const finish = (ev, standDown) => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
+      cancelHold();
+      autoScroll.stop();
+      if (releaseScroll) { releaseScroll(); releaseScroll = null; }
+      if (standDown || !armed) return;  // never armed: leave it to be the tap/click it was
+      swallowNextClick();
+      onDrop(ev);
+    };
+
+    const up = ev => {
+      if (ev.pointerId !== pid) return;
+      finish(ev.type === "pointercancel" ? null : ev, false);
+    };
+
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", up);
+
+    if (touch) holdTimer = setTimeout(() => arm(last), TOUCH_HOLD_MS);
+  }
+
+  // A copy of the dragged element that follows the pointer. Without it the drag has no
+  // visible subject, since the original stays put and only dims.
+  function makeGhost(el, e) {
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true);
+    g.classList.add("drag-ghost");
+    g.style.width = r.width + "px";
+    g.style.height = r.height + "px";
+    g.style.left = r.left + "px";
+    g.style.top = r.top + "px";
+    document.body.appendChild(g);
+    const dx = e.clientX - r.left, dy = e.clientY - r.top;
+    return {
+      move(ev) { g.style.left = (ev.clientX - dx) + "px"; g.style.top = (ev.clientY - dy) + "px"; },
+      remove() { g.remove(); }
+    };
+  }
+
+  // The ghost is pointer-events:none, so this reports what is actually underneath.
+  function listUnder(ev) {
+    const n = document.elementFromPoint(ev.clientX, ev.clientY);
+    return n ? n.closest(".list") : null;
+  }
+
+  function endDrag() {
+    autoScroll.stop();
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    document.body.classList.remove("pl-dragging");
+    document.querySelectorAll(".dragging").forEach(n => n.classList.remove("dragging"));
+    clearListHighlights();
+  }
 
   // ---------- View prefs: fit-width + collapsed columns (device-local) ----------
   const COLLAPSED_KEY = "sweckban.collapsedLists";
@@ -2205,7 +2592,12 @@
   // ---------- Planner timeline geometry ----------
   const PL_DAY = 86400000;
   const PL_ZOOM = { year: 0.72, quarter: 2.0, month: 5.2 };  // px per day
-  const PL_NAME_W = 220;
+  // The name column is a fixed pixel width set from JS (it has to match the sticky corner
+  // and the grid lines), so the phone variant lives here rather than in the stylesheet.
+  const plNameW = () => isPhone() ? 116 : 220;
+  // A year across 375px is a few pixels per month — unreadable and untouchable. Month zoom
+  // is the only one that works on a phone, so force it rather than offering the choice.
+  const plZoom = () => isPhone() ? "month" : plannerZoom;
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const plParse = s => { if (!s) return null; const d = new Date(s + "T12:00:00"); return isNaN(d) ? null : d; };
   const plYearStart = y => new Date(y, 0, 1, 12);
@@ -2247,7 +2639,9 @@
   };
   // Group tasks into swimlanes by assignee (departments, then people, then Unassigned)
   function plannerGroups(tasks) {
-    if (!plannerGroup) return [{ header: null, tasks }];
+    // Swimlanes on a phone would divide rows that are already as narrow as they can be,
+    // and the toggle isn't reachable there, so a preference set on the Mac doesn't carry.
+    if (!plannerGroup || isPhone()) return [{ header: null, tasks }];
     const keysOf = t => (t.assignees || []).map(a => a.type + ":" + a.id);
     const order = [];
     state.departments.forEach(d => order.push({ key: "dept:" + d.id, name: d.name, color: d.color }));
@@ -2269,7 +2663,7 @@
   function renderPlannerGrid(board, grid) {
     const tasks = (board.tasks || []).filter(t => !t.archived && plannerRowMatches(t));
     let { start, end, minY, maxY } = plannerRange(board);
-    const pxPerDay = PL_ZOOM[plannerZoom];
+    const pxPerDay = PL_ZOOM[plZoom()];
     // Extend the range with whole future years so the timeline fills the visible width
     // instead of ending mid-screen. Fall back to window width if the board hasn't laid
     // out yet (clientWidth can read tiny mid-render).
@@ -2278,7 +2672,7 @@
       const collapsed = document.querySelector(".layout") && document.querySelector(".layout").classList.contains("sidebar-collapsed");
       availW = window.innerWidth - (collapsed ? 0 : 260);
     }
-    availW = availW - PL_NAME_W - 6;
+    availW = availW - plNameW() - 6;
     while (availW > 0 && (Math.round((end - start) / PL_DAY) + 1) * pxPerDay < availW) {
       maxY += 1;
       end = plYearEnd(maxY);
@@ -2289,14 +2683,14 @@
 
     const inner = document.createElement("div");
     inner.className = "pl-inner";
-    inner.style.width = (PL_NAME_W + trackW) + "px";
+    inner.style.width = (plNameW() + trackW) + "px";
 
     // Header: year bands (top) + sub-period labels (bottom)
     const header = document.createElement("div");
     header.className = "pl-header";
     const corner = document.createElement("div");
     corner.className = "pl-corner";
-    corner.style.width = PL_NAME_W + "px";
+    corner.style.width = plNameW() + "px";
     corner.textContent = "Task";
     const scale = document.createElement("div");
     scale.className = "pl-scale";
@@ -2309,7 +2703,7 @@
       yl.textContent = y;
       scale.appendChild(yl);
     }
-    const subs = plSubPeriods(minY, maxY, plannerZoom);
+    const subs = plSubPeriods(minY, maxY, plZoom());
     subs.forEach(s => {
       const el = document.createElement("div");
       el.className = "pl-sub";
@@ -2326,7 +2720,7 @@
 
     const lines = document.createElement("div");
     lines.className = "pl-gridlines";
-    lines.style.left = PL_NAME_W + "px";
+    lines.style.left = plNameW() + "px";
     lines.style.width = trackW + "px";
     for (let y = minY; y <= maxY + 1; y++) {
       const gl = document.createElement("div");
@@ -2401,7 +2795,7 @@
 
       const name = document.createElement("div");
       name.className = "pl-name";
-      name.style.width = PL_NAME_W + "px";
+      name.style.width = plNameW() + "px";
       const dot = document.createElement("span");
       dot.className = "pl-name-dot";
       dot.style.background = taskColor(task);
@@ -2472,7 +2866,7 @@
         lane.className = "pl-row pl-lane";
         const lname = document.createElement("div");
         lname.className = "pl-name pl-lane-name";
-        lname.style.width = PL_NAME_W + "px";
+        lname.style.width = plNameW() + "px";
         if (g.header.color) {
           const ld = document.createElement("span");
           ld.className = "pl-name-dot";
@@ -2494,6 +2888,17 @@
 
     inner.appendChild(body);
     grid.appendChild(inner);
+
+    // The timeline always begins in January of the earliest year, which at month zoom can
+    // be a long way left of anything you actually have. A re-render rebuilds this element
+    // and so resets its scroll to 0 regardless, so opening on today rather than on January
+    // costs nothing and is the difference between seeing your tasks and seeing an empty
+    // winter. Clamped into range for a board that is entirely in the past or future.
+    const now = new Date(); now.setHours(12, 0, 0, 0);
+    const focus = now < start ? start : (now > end ? end : now);
+    requestAnimationFrame(() => {
+      grid.scrollLeft = Math.max(0, xOf(focus) - Math.min(120, grid.clientWidth * 0.25));
+    });
 
     if (!tasks.length) {
       const empty = document.createElement("div");
@@ -2520,24 +2925,28 @@
     addTaskBtn.addEventListener("click", () => openTaskModal(board, null));
     left.appendChild(addTaskBtn);
 
-    // Zoom control
-    const zoomSeg = document.createElement("div");
-    zoomSeg.className = "seg";
-    [["year", "Year"], ["quarter", "Quarter"], ["month", "Month"]].forEach(([val, label]) => {
-      const b = document.createElement("button");
-      b.className = "seg-btn" + (plannerZoom === val ? " on" : "");
-      b.textContent = label;
-      b.addEventListener("click", () => setPlannerZoom(val));
-      zoomSeg.appendChild(b);
-    });
-    left.appendChild(zoomSeg);
+    // Zoom and grouping are desktop-only: on a phone the zoom is pinned to month (see
+    // plZoom) and swimlanes would divide rows that are already as narrow as they go.
+    if (!isPhone()) {
+      // Zoom control
+      const zoomSeg = document.createElement("div");
+      zoomSeg.className = "seg";
+      [["year", "Year"], ["quarter", "Quarter"], ["month", "Month"]].forEach(([val, label]) => {
+        const b = document.createElement("button");
+        b.className = "seg-btn" + (plannerZoom === val ? " on" : "");
+        b.textContent = label;
+        b.addEventListener("click", () => setPlannerZoom(val));
+        zoomSeg.appendChild(b);
+      });
+      left.appendChild(zoomSeg);
 
-    const groupBtn = document.createElement("button");
-    groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
-    groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
-    groupBtn.title = "Group rows into swimlanes by assignee";
-    groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
-    left.appendChild(groupBtn);
+      const groupBtn = document.createElement("button");
+      groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
+      groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
+      groupBtn.title = "Group rows into swimlanes by assignee";
+      groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
+      left.appendChild(groupBtn);
+    }
 
     toolbar.append(left);
     root.appendChild(toolbar);
@@ -2733,7 +3142,6 @@
     // Header
     const header = document.createElement("div");
     header.className = "list-header";
-    header.draggable = true;
 
     // Collapse / expand toggle
     const collapseBtn = document.createElement("button");
@@ -2779,11 +3187,30 @@
     header.append(collapseBtn, title, right);
 
     // List drag (reorder lists)
-    header.addEventListener("dragstart", e => {
-      drag = { type: "list", listId: list.id };
-      e.dataTransfer.effectAllowed = "move";
+    header.addEventListener("pointerdown", e => {
+      // The collapse chevron, the delete button and the inline rename field own their taps.
+      if (e.target.closest(".list-collapse, .list-del, input")) return;
+      pointerDrag(e, {
+        onStart: ev => {
+          el.classList.add("dragging");
+          dragGhost = makeGhost(el, ev);
+          document.body.classList.add("pl-dragging");
+        },
+        onMove: ev => {
+          dragGhost.move(ev);
+          clearListHighlights();
+          const over = listUnder(ev);
+          if (over && over !== el) over.classList.add("drag-over-list");
+        },
+        onDrop: ev => {
+          const over = ev && listUnder(ev);
+          const targetId = (over && over !== el) ? over.dataset.listId : null;
+          endDrag();
+          if (targetId) moveList(board, list.id, targetId);
+          else renderAll();
+        }
+      });
     });
-    header.addEventListener("dragend", () => { drag = null; clearListHighlights(); });
 
     // Cards (respecting any active person filter)
     const cardsEl = document.createElement("div");
@@ -2816,43 +3243,12 @@
 
     el.append(header, cardsEl, footer);
 
-    // Drop targets
-    el.addEventListener("dragover", e => {
-      if (!drag) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      if (drag.type === "card") {
-        el.classList.add("drag-over-list");
-        positionIndicator(cardsEl, e.clientY);
-      }
-    });
-    el.addEventListener("dragleave", e => {
-      if (!el.contains(e.relatedTarget)) {
-        el.classList.remove("drag-over-list");
-        removeIndicator(cardsEl);
-      }
-    });
-    el.addEventListener("drop", e => {
-      e.preventDefault();
-      if (!drag) return;
-      if (drag.type === "card") {
-        const idx = indicatorIndex(cardsEl);
-        removeIndicator(cardsEl);
-        moveCard(board, drag.cardId, drag.fromListId, list.id, idx);
-      } else if (drag.type === "list" && drag.listId !== list.id) {
-        moveList(board, drag.listId, list.id);
-      }
-      drag = null;
-      clearListHighlights();
-    });
-
     return el;
   }
 
   function renderCard(board, list, card) {
     const el = document.createElement("div");
     el.className = "card";
-    el.draggable = true;
     el.dataset.cardId = card.id;
 
     const title = document.createElement("div");
@@ -2895,17 +3291,33 @@
 
     el.append(title, meta);
 
-    el.addEventListener("dragstart", e => {
-      drag = { type: "card", cardId: card.id, fromListId: list.id };
-      el.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.stopPropagation();
-    });
-    el.addEventListener("dragend", () => {
-      el.classList.remove("dragging");
-      drag = null;
-      clearListHighlights();
-      document.querySelectorAll(".drop-indicator").forEach(n => n.remove());
+    el.addEventListener("pointerdown", e => {
+      pointerDrag(e, {
+        onStart: ev => {
+          el.classList.add("dragging");
+          dragGhost = makeGhost(el, ev);
+          document.body.classList.add("pl-dragging");
+        },
+        onMove: ev => {
+          dragGhost.move(ev);
+          clearListHighlights();
+          const over = listUnder(ev);
+          if (!over) return;
+          over.classList.add("drag-over-list");
+          const cards = over.querySelector(".cards");
+          if (cards) positionIndicator(cards, ev.clientY);
+        },
+        onDrop: ev => {
+          const over = ev && listUnder(ev);
+          const cards = over && over.querySelector(".cards");
+          const targetId = over ? over.dataset.listId : null;
+          // Read the insertion point before endDrag() clears the indicator.
+          const idx = cards ? indicatorIndex(cards) : null;
+          endDrag();
+          if (targetId) moveCard(board, card.id, list.id, targetId, idx);
+          else renderAll();
+        }
+      });
     });
     el.addEventListener("click", () => openModal(board, list, card));
 
@@ -2997,6 +3409,7 @@
   const mDesc = document.getElementById("mDesc");
   const mDue = document.getElementById("mDue");
   const mLabels = document.getElementById("mLabels");
+  const mList = document.getElementById("mList");
   const mContext = document.getElementById("modalContext");
   let modalRef = null; // { board, list, card }
   let modalLabels = [];
@@ -3010,6 +3423,16 @@
     mContext.innerHTML = "";
     const b = document.createElement("b"); b.textContent = list.name;
     mContext.append(document.createTextNode("in list "), b);
+    // Moving without dragging: the only route VoiceOver has, and faster than dragging
+    // across a wide board anyway.
+    mList.innerHTML = "";
+    (board.lists || []).forEach(l => {
+      const o = document.createElement("option");
+      o.value = l.id;
+      o.textContent = l.name;
+      o.selected = l.id === list.id;
+      mList.appendChild(o);
+    });
     renderLabelPicker();
     overlay.classList.add("open");
     mTitle.focus();
@@ -3043,6 +3466,18 @@
     modalRef.card.desc = mDesc.value;
     modalRef.card.due = mDue.value;
     modalRef.card.labels = modalLabels;
+    // Picked a different list: move the card there, to the end. Do this after the field
+    // edits so both land in one save(), i.e. one undo step and one write.
+    const toId = mList.value;
+    if (toId && toId !== modalRef.list.id) {
+      const { board, list, card } = modalRef;
+      const to = (board.lists || []).find(l => l.id === toId);
+      const i = list.cards.findIndex(c => c.id === card.id);
+      if (to && i !== -1) {
+        list.cards.splice(i, 1);
+        to.cards.push(card);
+      }
+    }
     save(); closeModal(); renderAll();
   });
   document.getElementById("mCancel").addEventListener("click", closeModal);
@@ -3059,12 +3494,18 @@
 
   // ---------- Export / Import ----------
   document.getElementById("exportBtn").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const name = `sweckban-backup-${stamp}.json`;
+    const data = JSON.stringify(state, null, 2);
+    // A Blob plus a synthetic <a download> click is ignored by WKWebView on iOS — no
+    // download, no error. Hand the bytes to the shell instead and let it save them the
+    // way its platform does (save panel on macOS, share sheet on iOS).
+    if (NATIVE) { nativePost({ cmd: "export", name, data }); return; }
+    const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `sweckban-backup-${stamp}.json`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   });
@@ -3081,10 +3522,8 @@
         if (schemaProblem(parsed)) { alert("That backup was made by a newer version of Sweckban and can't be imported here. Update the app first."); return; }
         if (!confirm("Importing replaces all current boards. Continue?")) return;
         state = parsed;
-        if (!state.boards.find(b => b.id === state.activeBoard)) {
-          state.activeBoard = state.boards[0] ? state.boards[0].id : null;
-        }
         if (state.boards.length === 0) state = seed();
+        ensureActiveBoard();
         save(); renderAll();
       } catch (err) {
         alert("Import failed: that file isn't a valid Sweckban JSON backup.");
@@ -3275,7 +3714,7 @@
       // silently writes into a detached card/task.
       const hadEditorOpen = overlay.classList.contains("open") || taskOverlay.classList.contains("open");
       closeModal(); closeTaskModal(); closeArchive();
-      document.body.classList.remove("pl-dragging");
+      endDrag();
       readOnlyReason = schemaProblem(parsed);
       // Merge rather than replace. The arriving file is not necessarily newer in every
       // respect — it can be missing edits made here while the other device was offline.
@@ -3283,9 +3722,7 @@
       const keptLocalEdits = !readOnlyReason && !sameData(merged, parsed);
       state = merged.boards.length ? merged : parsed;
       lastPersisted = json;  // what is on disk right now
-      if (!state.boards.find(b => b.id === state.activeBoard)) {
-        state.activeBoard = state.boards[0] ? state.boards[0].id : null;
-      }
+      ensureActiveBoard();
       resetUndoBaseline();
       renderAll();
       // We held something the incoming file didn't, so push the merge back out and let
@@ -3340,16 +3777,34 @@
   const SIDEBAR_COLLAPSED_KEY = "sweckban.sidebarCollapsed";
   const layoutEl = document.querySelector(".layout");
   const sidebarToggle = document.getElementById("sidebarToggle");
-  function setSidebarCollapsed(collapsed) {
+  // On a phone the same class drives a slide-over sheet instead of a hidden column (see
+  // the phone block in the stylesheet), so "collapsed" still means "not on screen" and the
+  // toggle button keeps working unchanged. What differs is that the state isn't written
+  // down: the sheet should start shut every time, and a phone must not overwrite the
+  // preference the Mac set.
+  const scrim = document.createElement("div");
+  scrim.className = "sidebar-scrim";
+  scrim.addEventListener("click", () => setSidebarCollapsed(true));
+  document.querySelector(".layout").appendChild(scrim);
+
+  function setSidebarCollapsed(collapsed, remember = true) {
     layoutEl.classList.toggle("sidebar-collapsed", collapsed);
     sidebarToggle.setAttribute("aria-pressed", String(collapsed));
-    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    if (remember && !isPhone()) {
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    }
     requestAnimationFrame(updateScrollFades); // board width changed
   }
   let sidebarCollapsed = false;
   try { sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"; } catch (e) {}
-  setSidebarCollapsed(sidebarCollapsed);
+  setSidebarCollapsed(isPhone() ? true : sidebarCollapsed, false);
   sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!layoutEl.classList.contains("sidebar-collapsed")));
+  // Rotating, or dragging a Split View divider, crosses the breakpoint mid-session: shut
+  // the sheet on the way in, restore the remembered column on the way out.
+  PHONE_MQ.addEventListener("change", e => {
+    setSidebarCollapsed(e.matches ? true : sidebarCollapsed, false);
+    renderAll();   // the planner's pixel metrics are computed per render
+  });
 
   // ---------- Archive drawer ----------
   const archiveBtn = document.getElementById("archiveBtn");
@@ -3455,28 +3910,63 @@
   });
 
   // ---------- Undo / redo keybindings (Cmd+Z / Shift+Cmd+Z) ----------
+  // Shared by the page's own Cmd+Z handler and the iOS shell's UIKeyCommand. They differ in
+  // one respect: a keydown can be left alone for WebKit to handle natively, but a key command
+  // has already consumed the event, so there is nothing left to fall back to.
+  function boardUndoRedo(wantRedo, eventAlreadyConsumed) {
+    const t = document.activeElement;
+    // While typing, this is text undo, not board undo.
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+      if (eventAlreadyConsumed) document.execCommand(wantRedo ? "redo" : "undo");
+      return;
+    }
+    // Don't hijack undo while a modal / settings sheet is open
+    if (document.querySelector(".overlay.open")) return;
+    if (wantRedo) redo(); else undo();
+  }
+
   document.addEventListener("keydown", e => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
     const t = e.target;
-    // While typing, let the native text-field undo handle it, not the board
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-    // Don't hijack undo while a modal / settings sheet is open
     if (document.querySelector(".overlay.open")) return;
     e.preventDefault();
-    if (e.shiftKey) redo(); else undo();
+    boardUndoRedo(e.shiftKey, false);
   });
 
   // Let the native menu bar (Phase 5) drive board-level undo/redo
   window.__sweckbanUndo = undo;
   window.__sweckbanRedo = redo;
 
+  // iOS has no menu bar, so undo/redo need somewhere to live. A pair of header buttons
+  // beats shake-to-undo: it is discoverable, and shake is easy to trigger by accident.
+  if (PLATFORM === "ios") {
+    const tools = document.getElementById("settingsBtn").parentNode;
+    const icon = d =>
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const mk = (title, path, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn subtle icon-btn";
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.innerHTML = icon(path);   // static markup, same as the other header icons
+      b.addEventListener("click", fn);
+      return b;
+    };
+    tools.prepend(
+      mk("Undo", '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/>', () => undo()),
+      mk("Redo", '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h4"/>', () => redo())
+    );
+  }
+
   // ---------- Native menu bridge + Dock badge (Phase 5) ----------
   function switchBoard(dir) {
-    const i = state.boards.findIndex(b => b.id === state.activeBoard);
+    const i = state.boards.findIndex(b => b.id === activeBoardId);
     if (i < 0 || state.boards.length < 2) return;
     const n = (i + dir + state.boards.length) % state.boards.length;
-    state.activeBoard = state.boards[n].id;
-    save(); renderAll();
+    setActiveBoard(state.boards[n].id);
+    renderAll();   // view state only — nothing to save, nothing to sync
   }
   window.__sweckbanMenu = (action) => {
     switch (action) {
@@ -3493,6 +3983,12 @@
       case "toggleFitWidth": fitWidthToggle.checked = !fitWidthToggle.checked; fitWidthToggle.dispatchEvent(new Event("change")); break;
       case "nextBoard":      switchBoard(1); break;
       case "prevBoard":      switchBoard(-1); break;
+      // These three exist for the iOS shell's hardware-keyboard commands. On the Mac the
+      // page's own keydown listeners catch them; on iPadOS the chord is consumed by UIKit
+      // before the page ever sees it, so the shell has to hand them over explicitly.
+      case "search":         searchInput.focus(); searchInput.select(); break;
+      case "undo":           boardUndoRedo(false, true); break;
+      case "redo":           boardUndoRedo(true, true); break;
     }
   };
 

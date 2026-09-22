@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import UniformTypeIdentifiers
 
 // ============================================================
 // Sweckban — native wrapper
@@ -115,6 +116,13 @@ final class DataFileWatcher: NSObject, NSFilePresenter {
     // Our own writes pass this presenter to the coordinator, so they don't come back here.
     func presentedItemDidChange() { DispatchQueue.main.async { self.onChange?() } }
     func presentedSubitemDidChange(at url: URL) { presentedItemDidChange() }
+
+    // iCloud kept a second version of the file because two devices wrote it while offline.
+    // Same handler: the change path resolves conflicts after it syncs.
+    func presentedItemDidGain(_ version: NSFileVersion) {
+        NSLog("Sweckban: gained conflict version %@", version.url.lastPathComponent)
+        DispatchQueue.main.async { self.onChange?() }
+    }
 }
 
 func coordinatedRead(_ path: String) -> String? {
@@ -185,15 +193,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
 
         // Watch the data file so a change synced from another device applies as it lands,
         // rather than waiting for the window to be focused.
-        DataFileWatcher.shared.onChange = { [weak self] in self?.syncFromDisk() }
+        DataFileWatcher.shared.onChange = { [weak self] in
+            self?.syncFromDisk()
+            self?.resolveConflicts()   // after the sync: merge the winner first, then the losers
+        }
         DataFileWatcher.shared.start()
 
         let config = WKWebViewConfiguration()
         let ucc = config.userContentController
         ucc.add(self, name: "sweckban")
 
-        // Inject native flag, data path, and current file contents before the page runs
-        var boot = "window.__SWECKBAN_NATIVE = true; window.__SWECKBAN_DATA_PATH = \(jsString(DATA_FILE));"
+        // Inject native flag, platform, data path, and current file contents before the page runs.
+        // The platform decides which storage affordances the page offers (Reveal in Finder and
+        // Change Location are macOS-only); nothing else should branch on it.
+        var boot = "window.__SWECKBAN_NATIVE = true; window.__SWECKBAN_PLATFORM = \"macos\";"
+                 + " window.__SWECKBAN_DATA_PATH = \(jsString(DATA_FILE));"
         ensureDownloaded(DATA_FILE)
         let contents = coordinatedRead(DATA_FILE)
         if let contents = contents, !contents.isEmpty {
@@ -350,6 +364,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: DATA_FILE)])
         case "changeLocation":
             changeLocation()
+        case "export":
+            // The page used to build a Blob and click an <a download>, which does nothing in a
+            // WKWebView on iOS. It now hands us the bytes and each platform saves them its own way.
+            if let data = body["data"] as? String {
+                exportJSON(data, suggestedName: (body["name"] as? String) ?? "sweckban-backup.json")
+            }
         case "badge":
             // Dock badge: count of due-today/overdue cards (nil clears it)
             if let count = body["count"] as? Int {
@@ -360,10 +380,81 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         }
     }
 
+    func exportJSON(_ data: String, suggestedName: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedName
+        panel.allowedContentTypes = [.json]
+        panel.message = "Save a copy of your Sweckban data"
+        panel.begin { result in
+            guard result == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                let a = NSAlert()
+                a.alertStyle = .warning
+                a.messageText = "Sweckban couldn't write the export"
+                a.informativeText = "\(url.path)\n\n\(error.localizedDescription)"
+                a.runModal()
+            }
+        }
+    }
+
     // ---------- Pick up changes that arrived from another device ----------
     // The file presenter reports these as they land; becoming active is the backstop,
     // since a presenter isn't notified while the app is suspended.
-    func applicationDidBecomeActive(_ notification: Notification) { syncFromDisk() }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        syncFromDisk()
+        resolveConflicts()
+    }
+
+    // The page has to be loaded before it can be handed anything, so the launch pass over
+    // conflict versions waits for it. syncFromDisk isn't needed here — boot data already
+    // carried the file's contents into the page.
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        resolveConflicts()
+    }
+
+    func applyExternalJSON(_ json: String) {
+        webView?.evaluateJavaScript(
+            "window.__sweckbanApplyExternal && window.__sweckbanApplyExternal(\(jsString(json)))",
+            completionHandler: nil)
+    }
+
+    // ---------- iCloud conflict versions ----------
+    // When two devices write the file while offline, iCloud doesn't merge — it picks a
+    // winner for the file and parks the loser as an unresolved NSFileVersion. Nothing read
+    // those, so that edit was simply gone: the one remaining way this design loses work.
+    // Feed each one through the same merge the sync path uses, then clear them. The merge
+    // is commutative and idempotent, so the order they arrive in doesn't matter, and
+    // __sweckbanApplyExternal writes the result back whenever it kept something the
+    // incoming version lacked.
+    func resolveConflicts() {
+        guard webView != nil else { return }
+        let url = URL(fileURLWithPath: DATA_FILE)
+        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url),
+              !versions.isEmpty else { return }
+        NSLog("Sweckban: resolving %d conflict version(s) of %@", versions.count, url.path)
+
+        for v in versions {
+            if let text = try? String(contentsOf: v.url, encoding: .utf8), !text.isEmpty {
+                applyExternalJSON(text)
+            } else {
+                NSLog("Sweckban: couldn't read conflict version at %@", v.url.path)
+            }
+            v.isResolved = true
+        }
+
+        // Deleting the version files is a write to the item, so it needs coordinating.
+        var coordError: NSError?
+        NSFileCoordinator(filePresenter: DataFileWatcher.shared)
+            .coordinate(writingItemAt: url, options: .forDeleting, error: &coordError) { u in
+                do { try NSFileVersion.removeOtherVersionsOfItem(at: u) }
+                catch { NSLog("Sweckban: couldn't remove conflict versions: %@", String(describing: error)) }
+            }
+        if let e = coordError {
+            NSLog("Sweckban: conflict cleanup coordination failed: %@", String(describing: e))
+        }
+    }
 
     // Compare by content, not modification date: iCloud can restore a file with an older
     // mtime, and comparing dates also can't tell our own write apart from a foreign one.
@@ -377,9 +468,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUI
         lastWrittenJSON = contents
         updateLastMod()
         NSLog("Sweckban: applying external change from %@ (%d bytes)", DATA_FILE, contents.utf8.count)
-        webView?.evaluateJavaScript(
-            "window.__sweckbanApplyExternal && window.__sweckbanApplyExternal(\(jsString(contents)))",
-            completionHandler: nil)
+        applyExternalJSON(contents)
     }
 
     // Adopt the app's iCloud container once it becomes reachable (i.e. once the
