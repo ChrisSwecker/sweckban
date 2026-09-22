@@ -262,7 +262,7 @@ created conflict version is merged and cleared.
       `__SWECKBAN_PLATFORM === "ios"`, or support shake-to-undo by forwarding
       `motionEnded` to `__sweckbanUndo`. Toolbar is more discoverable.
 
-**ACCEPTANCE TESTS RUN ON REAL HARDWARE 2026-09-22** (iPad Pro 12.9-inch, signed device build,
+**ACCEPTANCE TESTS — ALL SIX PASS ON REAL HARDWARE, 2026-09-22** (iPad Pro 12.9-inch, signed device build,
 same iCloud account as the Mac, against the live container and real boards — a backup was taken
 first):
 
@@ -281,8 +281,11 @@ first):
 5. **Hard kill and relaunch — PASS (persistence).** The iPad app was terminated outright and
    relaunched with state intact. The *mid-edit flush race* specifically was not forced, since
    every edit already posts `save` immediately.
-6. **External links open in Safari — NOT TESTED.** Needs a card containing a URL and a tap; the
-   code path is identical to the Mac's, which is verified.
+6. **External links open in Safari — PASS.** A URL dragged from Safari and dropped onto the app
+   opened in Safari; the board was still there afterwards and the data file was untouched. Note
+   the page has no clickable links at all — the only `<a>` is the export-download trick, which
+   native builds bypass, and card text renders as text nodes — so a dropped link is the only way
+   to reach this delegate today.
 
 **TRAP WORTH REMEMBERING:** the first run of test 3 proved the merge but *not* the conflict code,
 because the Mac app still running was a pre-Phase-0 binary started before the build. The giveaway
