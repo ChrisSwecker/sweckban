@@ -262,6 +262,34 @@ created conflict version is merged and cleared.
       `__SWECKBAN_PLATFORM === "ios"`, or support shake-to-undo by forwarding
       `motionEnded` to `__sweckbanUndo`. Toolbar is more discoverable.
 
+**ACCEPTANCE TESTS RUN ON REAL HARDWARE 2026-09-22** (iPad Pro 12.9-inch, signed device build,
+same iCloud account as the Mac, against the live container and real boards — a backup was taken
+first):
+
+1. **Same boards on iPad and Mac — PASS.** All four boards, nine people and four departments
+   matched the container exactly on first launch.
+2. **Edit propagates both ways without relaunching — PASS.** A Mac-side write appeared on the
+   iPad in under 25s; a card created on the iPad reached the Mac container.
+3. **Offline edits to different cards both survive — PASS.** iPad in Airplane Mode edited one
+   card, the Mac edited another; on reconnect both devices held both edits, nothing lost, no
+   conflict version left behind.
+4. **Offline edits to the same card, later one wins — PASS, and this is the one that proved the
+   Phase 0 conflict code.** iCloud created a real conflict version and the Mac app logged:
+   `gained conflict version …_1mrpq.json` → `resolving 1 conflict version(s)` (twice, harmlessly —
+   the handler is idempotent by design) → `applying external change`. Both devices converged on
+   the later edit; `unresolvedConflictVersionsOfItem` returned 0 afterwards.
+5. **Hard kill and relaunch — PASS (persistence).** The iPad app was terminated outright and
+   relaunched with state intact. The *mid-edit flush race* specifically was not forced, since
+   every edit already posts `save` immediately.
+6. **External links open in Safari — NOT TESTED.** Needs a card containing a URL and a tap; the
+   code path is identical to the Mac's, which is verified.
+
+**TRAP WORTH REMEMBERING:** the first run of test 3 proved the merge but *not* the conflict code,
+because the Mac app still running was a pre-Phase-0 binary started before the build. The giveaway
+was `activeBoard` still present at the top level of the synced file — only the old build writes it.
+Restarting the Mac app on the new build stripped the key immediately and made test 4 meaningful.
+Check which binary is actually *running*, not which one is on disk.
+
 **Status:** built and running on the iPad simulator. Verified there: boot, the save bridge
 writing to disk, a coordinated external write applying live without relaunch (and merging
 rather than clobbering a local edit), the iOS Settings copy, export via the share sheet,
@@ -271,8 +299,7 @@ local-Documents fallback — which means **none of the numbered acceptance tests
 done**; they all need a signed device build on the real iCloud account. The hardware-keyboard
 item is also untested.
 
-Acceptance (test with the iOS Simulator tool, signed into the same iCloud account, plus
-one real device):
+Acceptance (all but #6 now verified on real hardware — see above):
 1. Same boards on iPad and Mac.
 2. Edit on the Mac → appears on the iPad within seconds without relaunching, and vice versa.
 3. Put both offline, edit a *different* card on each, reconnect → both edits survive on
