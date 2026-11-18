@@ -153,6 +153,7 @@
     border-radius: 4px; transition: background-color .1s, color .1s;
   }
   @media (hover: hover) { .seg-btn:hover { color: var(--ink); } }
+  .view-seg .seg-btn { display: inline-flex; align-items: center; gap: 6px; }
   .seg-btn.on { background: var(--accent); color: #fff; }
 
   .board-list { display: flex; flex-direction: column; gap: 1px; }
@@ -378,7 +379,8 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
     padding: 10px 16px; border-bottom: 1px solid var(--hairline);
   }
-  .planner-toolbar-left { display: flex; align-items: center; gap: 8px; }
+  .planner-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .planner-toolbar .seg-btn { white-space: nowrap; }
   .planner-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .dept-chip {
     display: inline-flex; align-items: center; gap: 6px;
@@ -444,6 +446,11 @@
   .pl-lane-name { text-transform: none; }
   .pl-lane-text { font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl-lane-track { background: rgba(128,128,128,0.05); }
+  .pl-lane-toggle, .pl-lane-toggle .pl-name { cursor: pointer; }
+  .pl-lane-hint {
+    position: sticky; left: 12px; display: inline-flex; align-items: center; height: 100%;
+    padding-left: 12px; font-size: 12px; color: var(--dim); white-space: nowrap;
+  }
   .pl-point {
     position: absolute; top: 27px; width: 12px; height: 12px; border-radius: 50%;
     transform: translateX(-6px); cursor: pointer; box-shadow: 0 0 0 2px var(--bg);
@@ -596,6 +603,12 @@
     padding: 2px 6px;
   }
   .due.overdue { color: #fff; background: #FF453A; border-color: #FF453A; }
+  .due.span { border-style: dashed; }
+  .assignee-dot { width: 9px; height: 9px; }
+  .modal-section {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+    color: var(--ink); padding-top: 12px; margin-bottom: -6px; border-top: 1px solid var(--hairline);
+  }
   .has-desc { font-size: 11px; color: var(--dim); }
   .drop-indicator { height: 2px; background: var(--accent); border-radius: 2px; }
 
@@ -706,7 +719,7 @@
     display: flex; flex-direction: column; gap: 1px;
   }
   .assignee-group { font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dim); padding: 6px 6px 2px; }
-  .assignee-row {
+  .assignee-row, .modal .field label.assignee-row {   /* beat `.modal .field label`'s block/uppercase */
     display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; cursor: pointer;
     text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0; color: var(--ink);
   }
@@ -793,6 +806,7 @@
     .header-left, header > span { flex: 1 1 100%; }
     .search-box { flex: 1; min-width: 0; }
     #searchInput, #searchInput:focus { width: 100%; }
+    .view-seg-label { display: none; }   /* icons only: the search field needs the width */
 
     /* The sidebar leaves the grid and becomes a slide-over sheet. `sidebar-collapsed`
        still means "not on screen", so the existing toggle button needs no special case.
@@ -885,6 +899,16 @@
       </div>
     </div>
     <span style="display:flex;gap:12px;align-items:center">
+      <div class="seg view-seg" id="viewSeg" role="radiogroup" aria-label="View">
+        <button class="seg-btn on" data-view="board" role="radio" aria-checked="true" title="Board: cards in columns">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="14" rx="1"/></svg>
+          <span class="view-seg-label">Board</span>
+        </button>
+        <button class="seg-btn" data-view="timeline" role="radio" aria-checked="false" title="Timeline: cards with dates as a Gantt chart">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="21" y2="18"/></svg>
+          <span class="view-seg-label">Timeline</span>
+        </button>
+      </div>
       <div class="search-box">
         <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -917,9 +941,9 @@
           <div class="board-list" id="boardList"></div>
           <div class="stack" style="margin-top:10px">
             <input type="text" id="newBoardName" placeholder="New board name" maxlength="60">
-            <div class="seg" id="boardTypeSeg" role="radiogroup" aria-label="Board type">
-              <button class="seg-btn on" data-type="kanban" role="radio" aria-checked="true">Kanban</button>
-              <button class="seg-btn" data-type="planner" role="radio" aria-checked="false">Planner</button>
+            <div class="seg" id="boardTypeSeg" role="radiogroup" aria-label="Opens in">
+              <button class="seg-btn on" data-type="board" role="radio" aria-checked="true">Board</button>
+              <button class="seg-btn" data-type="timeline" role="radio" aria-checked="false">Timeline</button>
             </div>
             <button class="btn" id="addBoardBtn">+ Add Board</button>
           </div>
@@ -1078,9 +1102,33 @@
       <label>Labels</label>
       <div class="label-picker" id="mLabels"></div>
     </div>
+    <div class="modal-section" role="heading" aria-level="3">Timeline</div>
+    <div class="two-col">
+      <div class="field"><label for="tStart">Start</label><input type="date" id="tStart"></div>
+      <div class="field"><label for="tEnd">End</label><input type="date" id="tEnd"></div>
+    </div>
     <div class="field">
       <label for="mDue">Due date</label>
       <input type="date" id="mDue">
+    </div>
+    <div class="field">
+      <label>Assignees</label>
+      <div id="tAssignees" class="assignee-list"></div>
+    </div>
+    <div class="field">
+      <label>Bar color <span class="label-hint">(overrides assignee)</span></label>
+      <div class="custom-row">
+        <input type="color" id="tColor" class="color-swatch-input" aria-label="Timeline bar color">
+        <button class="btn subtle mini" id="tColorReset">Use assignee color</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Milestones</label>
+      <div id="tMilestones" class="ms-list"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn subtle mini" id="tAddEol">+ EOL</button>
+        <button class="btn subtle mini" id="tAddMs">+ Milestone</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn subtle" id="mDelete">Archive Card</button>
@@ -1092,51 +1140,6 @@
   </div>
 </div>
 
-<!-- Task modal (planner) -->
-<div class="overlay" id="taskOverlay">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit task">
-    <div class="settings-title" id="taskModalTitle">Task</div>
-    <div class="field">
-      <label for="tTitle">Title</label>
-      <input type="text" id="tTitle" maxlength="200">
-    </div>
-    <div class="field">
-      <label for="tDesc">Description</label>
-      <textarea id="tDesc" placeholder="Notes, context…"></textarea>
-    </div>
-    <div class="two-col">
-      <div class="field"><label for="tStart">Start</label><input type="date" id="tStart"></div>
-      <div class="field"><label for="tEnd">End</label><input type="date" id="tEnd"></div>
-    </div>
-    <div class="field">
-      <label>Assignees</label>
-      <div id="tAssignees" class="assignee-list"></div>
-    </div>
-    <div class="field">
-      <label>Bar color <span class="label-hint">(overrides assignee)</span></label>
-      <div class="custom-row">
-        <input type="color" id="tColor" class="color-swatch-input" aria-label="Task bar color">
-        <button class="btn subtle mini" id="tColorReset">Use assignee color</button>
-      </div>
-    </div>
-    <div class="field">
-      <label>Milestones</label>
-      <div id="tMilestones" class="ms-list"></div>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn subtle mini" id="tAddDue">+ Due</button>
-        <button class="btn subtle mini" id="tAddEol">+ EOL</button>
-        <button class="btn subtle mini" id="tAddMs">+ Milestone</button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn subtle" id="tDelete">Delete Task</button>
-      <div class="btn-row">
-        <button class="btn subtle" id="tCancel">Cancel</button>
-        <button class="btn" id="tSave">Save Task</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <script>
 (() => {
@@ -1149,7 +1152,11 @@
   // a file with a higher number than this opens read-only (see schemaProblem).
   //   1: original (implicit — files without a schema field)
   //   2: updatedAt on every entity + tombstones map (multi-device merge groundwork)
-  const SCHEMA = 2;
+  //   3: no more board types. Planner tasks became cards (see unifyBoard); a card can carry
+  //      start/end/assignees/color/milestones, and the timeline draws any card with dates.
+  //      An older build would see a "Planner" board as an empty Kanban one, so it must open
+  //      a schema-3 file read-only rather than edit it.
+  const SCHEMA = 3;
   const TOMBSTONE_TTL = 90 * 24 * 60 * 60 * 1000;  // forget deletes older than this
   let readOnlyReason = "";  // non-empty ⇒ never write (newer schema / unreadable file)
 
@@ -1492,6 +1499,60 @@
           : val);
     return canon(a) === canon(b);
   }
+
+  // ---------- One kind of item: Planner tasks become cards (schema 3) ----------
+  // A board used to be either a Kanban board (lists of cards) or a Planner (a flat list
+  // of Gantt tasks). Now every board is lists of cards, and the timeline is just another
+  // way of drawing the same cards — any card with dates gets a bar. This folds a board's
+  // old `tasks` into its lists, in place.
+  //
+  // It runs on every normalize(), not once, because a file from a device that hasn't
+  // updated yet can still merge in a `tasks` array (mergeBoard keeps merging them). So it
+  // has to be idempotent and safe to run on both devices independently:
+  //   - The lists it creates have ids derived from the board id, so two devices that each
+  //     migrate the same Planner produce the same lists, which then merge cleanly.
+  //   - A task keeps its id as a card. If that card already exists (migrated earlier and
+  //     maybe moved to another column since), the card stays where it is; the task's
+  //     fields only land on it if the task was edited more recently.
+  const PLANNER_FIELDS = ["title", "desc", "start", "end", "assignees", "color", "milestones", "archived"];
+  function unifyBoard(b) {
+    const wasPlanner = b.type === "planner";
+    if (!Array.isArray(b.lists)) b.lists = [];
+    const tasks = Array.isArray(b.tasks) ? b.tasks.filter(t => t && t.id) : [];
+    if (tasks.length) {
+      const existing = new Map();
+      b.lists.forEach(l => (l.cards || []).forEach(c => existing.set(c.id, c)));
+      if (!b.lists.length) {
+        b.lists = [
+          { id: b.id + "-todo", name: "To Do", cards: [] },
+          { id: b.id + "-doing", name: "Doing", cards: [] },
+          { id: b.id + "-done", name: "Done", cards: [] },
+        ];
+      }
+      const home = b.lists[0];
+      if (!Array.isArray(home.cards)) home.cards = [];
+      tasks.forEach(t => {
+        const assignees = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
+        const card = existing.get(t.id);
+        if (card) {
+          if (mergeTs(t) > mergeTs(card)) {
+            PLANNER_FIELDS.forEach(k => { if (k in t) card[k] = t[k]; });
+            card.assignees = assignees;
+            card.updatedAt = t.updatedAt;
+          }
+          return;
+        }
+        const c = Object.assign({ labels: [], due: "" }, t, { assignees });
+        delete c.assignee;
+        home.cards.push(c);
+        existing.set(c.id, c);
+      });
+    }
+    delete b.tasks;
+    if (wasPlanner) b.defaultView = "timeline";
+    delete b.type;
+    return b;
+  }
   // MERGE:END
 
   // ---------- Save file (File System Access API) ----------
@@ -1677,7 +1738,7 @@
       try {
         const f = await fileHandle.getFile();
         if (f.lastModified > lastKnownMod) {
-          closeModal(); closeTaskModal(); closeArchive();  // don't leave an editor on stale objects
+          closeModal(); closeArchive();  // don't leave an editor on stale objects
           await readFromFile({ merge: true });
           localStorage.setItem(STORE_KEY, JSON.stringify(state));
           resetUndoBaseline();
@@ -1724,6 +1785,8 @@
     }
     ensureActiveBoard();
     if (!state.tombstones || typeof state.tombstones !== "object") state.tombstones = {};
+    // Before the timestamp pass below, so the lists it creates get stamped with the rest
+    (state.boards || []).forEach(unifyBoard);
     const now = Date.now();
     for (const id in state.tombstones) if (now - state.tombstones[id] > TOMBSTONE_TTL) delete state.tombstones[id];
     // Data from before change tracking: stamp everything with load time
@@ -1737,17 +1800,6 @@
     state.departments.forEach((d, i) => {
       if (!validHex(d.color)) d.color = TAG_COLORS[i % TAG_COLORS.length];
       if (!d.handle) d.handle = deriveHandle(d.name || ("dept" + i)) || ("dept" + i);
-    });
-    // Board types: default missing type to kanban; ensure the matching container exists
-    (state.boards || []).forEach(b => {
-      if (b.type !== "planner") b.type = "kanban";
-      if (b.type === "kanban" && !Array.isArray(b.lists)) b.lists = [];
-      if (b.type === "planner" && !Array.isArray(b.tasks)) b.tasks = [];
-      // Migrate legacy single assignee -> assignees[]
-      if (b.type === "planner") b.tasks.forEach(t => {
-        if (!Array.isArray(t.assignees)) t.assignees = t.assignee ? [t.assignee] : [];
-        if ("assignee" in t) delete t.assignee;
-      });
     });
   }
 
@@ -1776,12 +1828,19 @@
     return men;
   }
 
+  // Does this card involve a person/department: @-mentioned, or assigned on the timeline
+  function cardInvolves(card, owner, handle) {
+    if (cardMentions(card).has(String(handle || "").toLowerCase())) return true;
+    if (!owner) return false;
+    const type = state.people.includes(owner) ? "person" : "dept";
+    return (card.assignees || []).some(a => a.type === type && a.id === owner.id);
+  }
+
   function cardMatchesFilter(card) {
-    // Person filter (@mention) — AND-combined with the text search below
+    // Person filter (@mention or assignment) — AND-combined with the text search below
     if (filterHandles.size) {
-      const men = cardMentions(card);
       let hit = false;
-      for (const h of filterHandles) if (men.has(h)) { hit = true; break; }
+      for (const h of filterHandles) if (cardInvolves(card, handleOwner(h), h)) { hit = true; break; }
       if (!hit) return false;
     }
     // Text search over title + description
@@ -2073,7 +2132,7 @@
       right.style.alignItems = "center";
 
       let count = 0;
-      if (board && board.lists) board.lists.forEach(l => l.cards.forEach(c => { if (cardMentions(c).has(p.handle.toLowerCase())) count++; }));
+      if (board && board.lists) board.lists.forEach(l => l.cards.forEach(c => { if (!c.archived && cardInvolves(c, p, p.handle)) count++; }));
       const cnt = document.createElement("span");
       cnt.className = "pcount";
       cnt.textContent = count;
@@ -2147,7 +2206,6 @@
   function renderDepartments() {
     departmentsListEl.innerHTML = "";
     const board = activeBoard();
-    const isPlanner = board && board.type === "planner";
     state.departments.forEach(d => {
       const dh = (d.handle || "").toLowerCase();
       const row = document.createElement("div");
@@ -2168,14 +2226,14 @@
       const right = document.createElement("span");
       right.style.cssText = "display:flex;gap:10px;align-items:center";
       let count = 0;
-      if (isPlanner) (board.tasks || []).forEach(t => { if (!t.archived && (t.assignees || []).some(a => a.type === "dept" && a.id === d.id)) count++; });
+      if (board && board.lists) board.lists.forEach(l => l.cards.forEach(c => { if (!c.archived && cardInvolves(c, d, d.handle)) count++; }));
       const cnt = document.createElement("span"); cnt.className = "pcount"; cnt.textContent = count;
 
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "×"; del.title = "Remove department";
       del.addEventListener("click", e => {
         e.stopPropagation();
-        if (!confirm(`Remove department "${d.name}"? Tasks assigned to it become unassigned; @${d.handle} text stays but stops being a tag.`)) return;
+        if (!confirm(`Remove department "${d.name}"? Cards assigned to it become unassigned; @${d.handle} text stays but stops being a tag.`)) return;
         filterHandles.delete(dh);
         removeDepartment(d.id);
       });
@@ -2190,29 +2248,17 @@
     });
   }
 
-  // Which people/departments are actively filtering the planner (by assignment)
-  function selectedPlannerKeys() {
-    const keys = new Set();
-    filterHandles.forEach(h => {
-      const owner = handleOwner(h);
-      if (!owner) return;
-      keys.add((state.people.includes(owner) ? "person:" : "dept:") + owner.id);
-    });
-    return keys;
-  }
-
   function renderFilterBanner() {
     const banner = document.getElementById("filterBanner");
     if (!filterHandles.size) { banner.hidden = true; banner.innerHTML = ""; return; }
-    const isPlanner = (() => { const b = activeBoard(); return b && b.type === "planner"; })();
     banner.hidden = false; banner.innerHTML = "";
-    banner.append(isPlanner ? "Showing tasks assigned to " : "Showing cards mentioning ");
+    banner.append("Showing cards that mention or are assigned to ");
     [...filterHandles].forEach((h, i) => {
       if (i) banner.append(" or ");
       const owner = handleOwner(h);
       const s = document.createElement("span");
       s.className = "fh";
-      s.textContent = isPlanner ? (owner ? owner.name : "@" + h) : "@" + h;
+      s.textContent = owner ? owner.name : "@" + h;
       if (owner && owner.color) s.style.color = owner.color;
       banner.append(s);
     });
@@ -2231,17 +2277,15 @@
     state.boards.forEach(b => {
       const item = document.createElement("div");
       item.className = "board-item" + (b.id === activeBoardId ? " active" : "");
-      const isPlanner = b.type === "planner";
-      const cardCount = isPlanner
-        ? (b.tasks || []).filter(t => !t.archived).length
-        : (b.lists || []).reduce((n, l) => n + l.cards.filter(c => !c.archived).length, 0);
+      const isPlanner = boardView(b) === "timeline";
+      const cardCount = (b.lists || []).reduce((n, l) => n + l.cards.filter(c => !c.archived).length, 0);
 
       const icon = document.createElement("span");
       icon.className = "board-type-icon";
       icon.innerHTML = isPlanner
         ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="21" y2="18"/></svg>'
         : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="14" rx="1"/></svg>';
-      icon.title = isPlanner ? "Planner" : "Kanban";
+      icon.title = isPlanner ? "Showing the timeline" : "Showing the board";
 
       const name = document.createElement("span");
       name.className = "board-name";
@@ -2262,8 +2306,7 @@
       del.title = "Delete board";
       del.addEventListener("click", (e) => {
         e.stopPropagation();
-        const what = isPlanner ? "all its tasks" : "all its cards";
-        if (!confirm(`Delete board "${b.name}" and ${what}?`)) return;
+        if (!confirm(`Delete board "${b.name}" and all its cards?`)) return;
         tombBoard(b);
         state.boards = state.boards.filter(x => x.id !== b.id);
         if (state.boards.length === 0) { const t = state.tombstones; state = seed(); state.tombstones = t; }
@@ -2282,8 +2325,38 @@
     });
   }
 
-  // Board-type segmented control
-  let newBoardType = "kanban";
+  // ---------- Board / Timeline view (device-local) ----------
+  // Both views draw the same cards, so which one is showing is view state, like the zoom:
+  // it stays on this device and never syncs. A board remembers which view it was made in
+  // (or that it used to be a Planner) as `defaultView`, used until you pick one here.
+  const BOARD_VIEW_KEY = "sweckban.boardViews";
+  let boardViews = {};
+  try { boardViews = JSON.parse(localStorage.getItem(BOARD_VIEW_KEY) || "{}") || {}; } catch (e) {}
+  function boardView(b) {
+    const v = b && (boardViews[b.id] || b.defaultView);
+    return v === "timeline" ? "timeline" : "board";
+  }
+  function setBoardView(b, view) {
+    if (!b) return;
+    boardViews[b.id] = view;
+    try { localStorage.setItem(BOARD_VIEW_KEY, JSON.stringify(boardViews)); } catch (e) {}
+    renderAll();   // view state only — nothing to save, nothing to sync
+  }
+  const viewSeg = document.getElementById("viewSeg");
+  viewSeg.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => setBoardView(activeBoard(), btn.dataset.view));
+  });
+  function renderViewSeg() {
+    const v = boardView(activeBoard());
+    viewSeg.querySelectorAll(".seg-btn").forEach(btn => {
+      const on = btn.dataset.view === v;
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-checked", String(on));
+    });
+  }
+
+  // Which view a new board opens in
+  let newBoardType = "board";
   const boardTypeSeg = document.getElementById("boardTypeSeg");
   boardTypeSeg.querySelectorAll(".seg-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -2302,9 +2375,12 @@
     const input = document.getElementById("newBoardName");
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
-    const b = (type === "planner")
-      ? { id: uid(), name, type: "planner", tasks: [] }
-      : { id: uid(), name, type: "kanban", lists: [] };
+    const b = { id: uid(), name, lists: [] };
+    if (type === "timeline") {
+      // The timeline has no columns to add cards to, so give it the usual three
+      b.defaultView = "timeline";
+      b.lists = ["To Do", "Doing", "Done"].map(n => ({ id: uid(), name: n, cards: [] }));
+    }
     state.boards.push(b);
     setActiveBoard(b.id);
     input.value = "";
@@ -2509,12 +2585,26 @@
     try { localStorage.setItem(PLANNER_ZOOM_KEY, z); } catch (e) {}
     renderBoard();
   }
+  // Swimlanes: "none", "list" (by column) or "assignee". "1"/"0" are from when grouping was
+  // an on/off switch and only meant by assignee.
   const PLANNER_GROUP_KEY = "sweckban.plannerGroup";
-  let plannerGroup = false;
-  try { plannerGroup = localStorage.getItem(PLANNER_GROUP_KEY) === "1"; } catch (e) {}
-  function setPlannerGroup(on) {
-    plannerGroup = on;
-    try { localStorage.setItem(PLANNER_GROUP_KEY, on ? "1" : "0"); } catch (e) {}
+  let plannerGroup = "none";
+  try {
+    const g = localStorage.getItem(PLANNER_GROUP_KEY);
+    plannerGroup = g === "1" ? "assignee" : (["list", "assignee"].includes(g) ? g : "none");
+  } catch (e) {}
+  function setPlannerGroup(g) {
+    plannerGroup = g;
+    try { localStorage.setItem(PLANNER_GROUP_KEY, g); } catch (e) {}
+    renderBoard();
+  }
+  // Cards without dates sit in a collapsible lane at the bottom of the timeline
+  const UNSCHEDULED_OPEN_KEY = "sweckban.unscheduledOpen";
+  let unscheduledOpen = false;
+  try { unscheduledOpen = localStorage.getItem(UNSCHEDULED_OPEN_KEY) === "1"; } catch (e) {}
+  function setUnscheduledOpen(on) {
+    unscheduledOpen = on;
+    try { localStorage.setItem(UNSCHEDULED_OPEN_KEY, on ? "1" : "0"); } catch (e) {}
     renderBoard();
   }
 
@@ -2547,17 +2637,20 @@
   function removeDepartment(id) {
     tomb(id);
     state.departments = state.departments.filter(d => d.id !== id);
-    // Drop this department from any task's assignees
-    state.boards.forEach(b => (b.tasks || []).forEach(t => {
-      if (Array.isArray(t.assignees)) t.assignees = t.assignees.filter(a => !(a.type === "dept" && a.id === id));
-    }));
+    // Drop this department from any card's assignees
+    forEachCard(c => {
+      if (Array.isArray(c.assignees)) c.assignees = c.assignees.filter(a => !(a.type === "dept" && a.id === id));
+    });
     save(); renderAll();
   }
-  // Drop a person from every planner task's assignees (called on person delete)
+  // Drop a person from every card's assignees (called on person delete)
   function unassignPersonFromTasks(id) {
-    state.boards.forEach(b => (b.tasks || []).forEach(t => {
-      if (Array.isArray(t.assignees)) t.assignees = t.assignees.filter(a => !(a.type === "person" && a.id === id));
-    }));
+    forEachCard(c => {
+      if (Array.isArray(c.assignees)) c.assignees = c.assignees.filter(a => !(a.type === "person" && a.id === id));
+    });
+  }
+  function forEachCard(fn) {
+    state.boards.forEach(b => (b.lists || []).forEach(l => (l.cards || []).forEach(c => fn(c, l, b))));
   }
   const departmentById = id => state.departments.find(d => d.id === id) || null;
   const personById = id => state.people.find(p => p.id === id) || null;
@@ -2576,18 +2669,19 @@
   function taskColor(task) {
     return validHex(task.color) || assigneeColor((task.assignees || [])[0]) || TAG_COLORS[0];
   }
-  function plannerRowMatches(task) {
-    if (searchQuery) {
-      const hay = ((task.title || "") + " " + (task.desc || "")).toLowerCase();
-      if (!hay.includes(searchQuery)) return false;
-    }
-    const sel = selectedPlannerKeys();
-    if (sel.size) {
-      const keys = (task.assignees || []).map(a => a.type + ":" + a.id);
-      if (!keys.some(k => sel.has(k))) return false;
-    }
-    return true;
+  // Every live card on the board, with the list it sits in, in board order
+  function boardCards(board) {
+    const out = [];
+    (board.lists || []).forEach(l => (l.cards || []).forEach(c => { if (!c.archived) out.push({ card: c, list: l }); }));
+    return out;
   }
+  // All the dates a card puts on the timeline: its span, its due date, its milestones
+  function cardDates(c) {
+    const out = [plParse(c.start), plParse(c.end), plParse(c.due)];
+    (c.milestones || []).forEach(m => out.push(plParse(m.date)));
+    return out.filter(Boolean);
+  }
+  const isScheduled = c => cardDates(c).length > 0;
 
   // ---------- Planner timeline geometry ----------
   const PL_DAY = 86400000;
@@ -2605,10 +2699,7 @@
 
   function plannerRange(board) {
     const dates = [];
-    (board.tasks || []).filter(t => !t.archived).forEach(t => {
-      [plParse(t.start), plParse(t.end)].forEach(d => d && dates.push(d));
-      (t.milestones || []).forEach(m => { const d = plParse(m.date); if (d) dates.push(d); });
-    });
+    boardCards(board).forEach(({ card }) => dates.push(...cardDates(card)));
     const thisYear = new Date().getFullYear();
     let minY, maxY;
     if (!dates.length) { minY = thisYear - 1; maxY = thisYear + 3; }
@@ -2637,12 +2728,18 @@
     const m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
     return `${d.getFullYear()}-${m}-${day}`;
   };
-  // Group tasks into swimlanes by assignee (departments, then people, then Unassigned)
-  function plannerGroups(tasks) {
+  // Group rows into swimlanes: by column (the card's list), or by assignee (departments,
+  // then people, then Unassigned). Items are { card, list }.
+  function plannerGroups(board, tasks) {
     // Swimlanes on a phone would divide rows that are already as narrow as they can be,
     // and the toggle isn't reachable there, so a preference set on the Mac doesn't carry.
-    if (!plannerGroup || isPhone()) return [{ header: null, tasks }];
-    const keysOf = t => (t.assignees || []).map(a => a.type + ":" + a.id);
+    if (plannerGroup === "none" || isPhone()) return [{ header: null, tasks }];
+    if (plannerGroup === "list") {
+      return (board.lists || [])
+        .map(l => ({ header: { key: "list:" + l.id, name: l.name, color: null }, tasks: tasks.filter(t => t.list === l) }))
+        .filter(g => g.tasks.length);
+    }
+    const keysOf = t => (t.card.assignees || []).map(a => a.type + ":" + a.id);
     const order = [];
     state.departments.forEach(d => order.push({ key: "dept:" + d.id, name: d.name, color: d.color }));
     state.people.forEach(p => order.push({ key: "person:" + p.id, name: p.name, color: p.color }));
@@ -2653,7 +2750,7 @@
       const ts = tasks.filter(t => keysOf(t).includes(o.key));
       if (ts.length) { groups.push({ header: o, tasks: ts }); ts.forEach(t => placed.add(t)); }
     });
-    const unassigned = tasks.filter(t => !(t.assignees || []).length);
+    const unassigned = tasks.filter(t => !(t.card.assignees || []).length);
     if (unassigned.length) { groups.push({ header: { key: "none", name: "Unassigned", color: null }, tasks: unassigned }); unassigned.forEach(t => placed.add(t)); }
     const leftover = tasks.filter(t => !placed.has(t)); // assignees all reference since-deleted ids
     if (leftover.length) groups.push({ header: { key: "other", name: "Other", color: null }, tasks: leftover });
@@ -2661,7 +2758,10 @@
   }
 
   function renderPlannerGrid(board, grid) {
-    const tasks = (board.tasks || []).filter(t => !t.archived && plannerRowMatches(t));
+    // Rows are { card, list }: the same card objects the board view shows
+    const visible = boardCards(board).filter(t => cardMatchesFilter(t.card));
+    const tasks = visible.filter(t => isScheduled(t.card));
+    const unscheduled = visible.filter(t => !isScheduled(t.card));
     let { start, end, minY, maxY } = plannerRange(board);
     const pxPerDay = PL_ZOOM[plZoom()];
     // Extend the range with whole future years so the timeline fills the visible width
@@ -2691,7 +2791,7 @@
     const corner = document.createElement("div");
     corner.className = "pl-corner";
     corner.style.width = plNameW() + "px";
-    corner.textContent = "Task";
+    corner.textContent = "Card";
     const scale = document.createElement("div");
     scale.className = "pl-scale";
     scale.style.width = trackW + "px";
@@ -2745,9 +2845,9 @@
     body.appendChild(lines);
 
     // Drag a bar to move it (body) or resize it (edge handles); a click with no
-    // movement opens the task modal. Commits new start/end on mouseup.
+    // movement opens the card editor. Commits new start/end on mouseup.
     // Pointer events (not mouse events) so the same code drives touch/pen on iPad.
-    function attachBarDrag(bar, task) {
+    function attachBarDrag(bar, task, list) {
       bar.addEventListener("pointerdown", e => {
         if (e.button !== 0) return;  // touch and pen report button 0 too
         e.preventDefault();
@@ -2778,7 +2878,7 @@
           document.removeEventListener("pointercancel", onUp);
           document.body.classList.remove("pl-dragging");
           if (ev.type === "pointercancel") { renderAll(); return; }  // OS took the gesture: discard preview
-          if (!pend || Math.abs(ev.clientX - startX) <= 3) { openTaskModal(board, task); return; }
+          if (!pend || Math.abs(ev.clientX - startX) <= 3) { openModal(board, list, task); return; }
           task.start = fmtDate(pend.s);
           task.end = fmtDate(pend.en);
           save(); renderAll();
@@ -2789,13 +2889,15 @@
       });
     }
 
-    function renderTaskRow(task) {
+    function renderTaskRow({ card: task, list }) {
+      const open = () => openModal(board, list, task);
       const row = document.createElement("div");
       row.className = "pl-row";
 
       const name = document.createElement("div");
       name.className = "pl-name";
       name.style.width = plNameW() + "px";
+      name.title = `${task.title || "(untitled)"} — in ${list.name}`;
       const dot = document.createElement("span");
       dot.className = "pl-name-dot";
       dot.style.background = taskColor(task);
@@ -2803,12 +2905,12 @@
       tt.className = "pl-name-text";
       tt.textContent = task.title || "(untitled)";
       name.append(dot, tt);
-      name.addEventListener("click", () => openTaskModal(board, task));
+      name.addEventListener("click", open);
 
       const track = document.createElement("div");
       track.className = "pl-track";
       track.style.width = trackW + "px";
-      track.addEventListener("click", e => { if (e.target === track) openTaskModal(board, task); });
+      track.addEventListener("click", e => { if (e.target === track) open(); });
 
       const s = plParse(task.start), en = plParse(task.end);
       if (s && en && en >= s) {
@@ -2817,12 +2919,12 @@
         bar.style.left = xOf(s) + "px";
         bar.style.width = Math.max(4, xOf(en) - xOf(s)) + "px";
         bar.style.background = taskColor(task);
-        bar.title = task.title;
+        bar.title = `${task.title} — ${list.name}`;
         const hl = document.createElement("span"); hl.className = "pl-bar-handle l";
         const lbl = document.createElement("span"); lbl.className = "pl-bar-label"; lbl.textContent = task.title;
         const hr = document.createElement("span"); hr.className = "pl-bar-handle r";
         bar.append(hl, lbl, hr);
-        attachBarDrag(bar, task);
+        attachBarDrag(bar, task, list);
         track.appendChild(bar);
       } else if (s || en) {
         const pt = document.createElement("div");
@@ -2830,10 +2932,13 @@
         pt.style.left = xOf(s || en) + "px";
         pt.style.background = taskColor(task);
         pt.title = task.title;
-        pt.addEventListener("click", () => openTaskModal(board, task));
+        pt.addEventListener("click", open);
         track.appendChild(pt);
       }
-      (task.milestones || []).forEach(m => {
+      // The card's due date is drawn as a "Due" milestone alongside any real ones
+      const marks = (task.milestones || []).slice();
+      if (task.due) marks.push({ label: "Due", date: task.due });
+      marks.forEach(m => {
         const d = plParse(m.date);
         if (!d) return;
         const col = milestoneColor(m, task);
@@ -2841,7 +2946,7 @@
         ms.className = "pl-ms";
         ms.style.left = xOf(d) + "px";
         ms.title = (m.label || "Milestone") + " — " + m.date;
-        ms.addEventListener("click", () => openTaskModal(board, task));
+        ms.addEventListener("click", open);
         const diamond = document.createElement("span");
         diamond.className = "pl-ms-diamond";
         diamond.style.background = col;
@@ -2859,32 +2964,58 @@
       return row;
     }
 
-    // Swimlanes (grouped) or a flat list
-    plannerGroups(tasks).forEach(g => {
-      if (g.header) {
-        const lane = document.createElement("div");
-        lane.className = "pl-row pl-lane";
-        const lname = document.createElement("div");
-        lname.className = "pl-name pl-lane-name";
-        lname.style.width = plNameW() + "px";
-        if (g.header.color) {
-          const ld = document.createElement("span");
-          ld.className = "pl-name-dot";
-          ld.style.background = g.header.color;
-          lname.appendChild(ld);
-        }
-        const lt = document.createElement("span");
-        lt.className = "pl-lane-text";
-        lt.textContent = `${g.header.name}  (${g.tasks.length})`;
-        lname.appendChild(lt);
-        const ltrack = document.createElement("div");
-        ltrack.className = "pl-track pl-lane-track";
-        ltrack.style.width = trackW + "px";
-        lane.append(lname, ltrack);
-        body.appendChild(lane);
+    function laneRow(header, count, onClick) {
+      const lane = document.createElement("div");
+      lane.className = "pl-row pl-lane";
+      const lname = document.createElement("div");
+      lname.className = "pl-name pl-lane-name";
+      lname.style.width = plNameW() + "px";
+      if (header.color) {
+        const ld = document.createElement("span");
+        ld.className = "pl-name-dot";
+        ld.style.background = header.color;
+        lname.appendChild(ld);
       }
+      const lt = document.createElement("span");
+      lt.className = "pl-lane-text";
+      lt.textContent = `${header.name}  (${count})`;
+      lname.appendChild(lt);
+      const ltrack = document.createElement("div");
+      ltrack.className = "pl-track pl-lane-track";
+      ltrack.style.width = trackW + "px";
+      if (header.hint) {
+        const h = document.createElement("span");
+        h.className = "pl-lane-hint";
+        h.style.left = (plNameW() + 12) + "px";   // stick just right of the sticky name column
+        h.textContent = header.hint;
+        ltrack.appendChild(h);
+      }
+      lane.append(lname, ltrack);
+      if (onClick) {
+        lane.classList.add("pl-lane-toggle");
+        lane.setAttribute("role", "button");
+        lane.setAttribute("aria-expanded", String(unscheduledOpen));
+        lane.addEventListener("click", onClick);
+      }
+      return lane;
+    }
+
+    // Swimlanes (grouped) or a flat list
+    plannerGroups(board, tasks).forEach(g => {
+      if (g.header) body.appendChild(laneRow(g.header, g.tasks.length));
       g.tasks.forEach(task => body.appendChild(renderTaskRow(task)));
     });
+
+    // Cards with no dates at all: they are still on the board, just not on the timeline
+    // yet. Folded away by default so a busy board doesn't bury the chart under them.
+    if (unscheduled.length) {
+      body.appendChild(laneRow(
+        { name: (unscheduledOpen ? "▾ " : "▸ ") + "No dates", color: null,
+          hint: unscheduledOpen ? "Open a card and give it a start and end to put it on the timeline" : "" },
+        unscheduled.length,
+        () => setUnscheduledOpen(!unscheduledOpen)));
+      if (unscheduledOpen) unscheduled.forEach(t => body.appendChild(renderTaskRow(t)));
+    }
 
     inner.appendChild(body);
     grid.appendChild(inner);
@@ -2903,7 +3034,9 @@
     if (!tasks.length) {
       const empty = document.createElement("div");
       empty.className = "planner-empty";
-      empty.textContent = "No tasks yet. Click “+ Add Task” to start planning.";
+      empty.textContent = unscheduled.length
+        ? "No cards with dates yet. Open a card and give it a start and end date."
+        : "No cards yet. Click “+ Add Card” to start planning.";
       grid.appendChild(empty);
     }
   }
@@ -2921,8 +3054,8 @@
     left.className = "planner-toolbar-left";
     const addTaskBtn = document.createElement("button");
     addTaskBtn.className = "btn";
-    addTaskBtn.textContent = "+ Add Task";
-    addTaskBtn.addEventListener("click", () => openTaskModal(board, null));
+    addTaskBtn.textContent = "+ Add Card";
+    addTaskBtn.addEventListener("click", () => openNewCardModal(board));
     left.appendChild(addTaskBtn);
 
     // Zoom and grouping are desktop-only: on a phone the zoom is pinned to month (see
@@ -2940,12 +3073,17 @@
       });
       left.appendChild(zoomSeg);
 
-      const groupBtn = document.createElement("button");
-      groupBtn.className = "btn subtle" + (plannerGroup ? " on" : "");
-      groupBtn.textContent = plannerGroup ? "Grouped" : "Group";
-      groupBtn.title = "Group rows into swimlanes by assignee";
-      groupBtn.addEventListener("click", () => setPlannerGroup(!plannerGroup));
-      left.appendChild(groupBtn);
+      const groupSeg = document.createElement("div");
+      groupSeg.className = "seg";
+      groupSeg.setAttribute("aria-label", "Group rows");
+      [["none", "No groups"], ["list", "By column"], ["assignee", "By assignee"]].forEach(([val, label]) => {
+        const b = document.createElement("button");
+        b.className = "seg-btn" + (plannerGroup === val ? " on" : "");
+        b.textContent = label;
+        b.addEventListener("click", () => setPlannerGroup(val));
+        groupSeg.appendChild(b);
+      });
+      left.appendChild(groupSeg);
     }
 
     toolbar.append(left);
@@ -2960,17 +3098,15 @@
     boardEl.appendChild(root);
   }
 
-  // ---------- Task modal (planner) ----------
-  const taskOverlay = document.getElementById("taskOverlay");
-  const tTitle = document.getElementById("tTitle");
-  const tDesc = document.getElementById("tDesc");
+  // ---------- Card editor: timeline fields ----------
+  // The card editor carries what used to be the Planner's task editor: start/end,
+  // assignees, bar color and milestones. These hold the working copies while it's open.
   const tStart = document.getElementById("tStart");
   const tEnd = document.getElementById("tEnd");
   const tAssignees = document.getElementById("tAssignees");
   const tColor = document.getElementById("tColor");
   const tColorReset = document.getElementById("tColorReset");
   const tMilestonesEl = document.getElementById("tMilestones");
-  let taskRef = null;          // { board, task, isNew }
   let taskMs = [];             // working milestone copies
   let taskColorOverride = "";  // "" (use assignee) or hex
 
@@ -3039,66 +3175,21 @@
     });
   }
 
-  function openTaskModal(board, task) {
-    const isNew = !task;
-    const t = task || { id: uid(), title: "", desc: "", start: "", end: "", assignees: [], color: "", milestones: [] };
-    taskRef = { board, task: t, isNew };
-    taskMs = (t.milestones || []).map(m => ({ ...m }));
-    taskColorOverride = t.color || "";
-    document.getElementById("taskModalTitle").textContent = isNew ? "New Task" : "Edit Task";
-    tTitle.value = t.title || "";
-    tDesc.value = t.desc || "";
-    tStart.value = t.start || "";
-    tEnd.value = t.end || "";
-    buildAssigneeCheckboxes((t.assignees || []).map(keyOfAssignee));
-    syncTaskColor();
-    renderMilestoneRows();
-    document.getElementById("tDelete").style.display = isNew ? "none" : "";
-    taskOverlay.classList.add("open");
-    tTitle.focus();
-  }
-  function closeTaskModal() { taskOverlay.classList.remove("open"); taskRef = null; }
-
   tColor.addEventListener("input", () => { taskColorOverride = tColor.value; syncTaskColor(); });
   tColorReset.addEventListener("click", () => { taskColorOverride = ""; syncTaskColor(); });
   tAssignees.addEventListener("change", () => { if (!validHex(taskColorOverride)) syncTaskColor(); });
-  document.getElementById("tAddDue").addEventListener("click", () => { taskMs.push({ id: uid(), label: "Due", date: "" }); renderMilestoneRows(); });
   document.getElementById("tAddEol").addEventListener("click", () => { taskMs.push({ id: uid(), label: "EOL", date: "" }); renderMilestoneRows(); });
   document.getElementById("tAddMs").addEventListener("click", () => { taskMs.push({ id: uid(), label: "", date: "" }); renderMilestoneRows(); });
-  document.getElementById("tCancel").addEventListener("click", closeTaskModal);
-  taskOverlay.addEventListener("click", e => { if (e.target === taskOverlay) closeTaskModal(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && taskOverlay.classList.contains("open")) closeTaskModal(); });
-
-  document.getElementById("tSave").addEventListener("click", () => {
-    if (!taskRef) return;
-    const t = taskRef.task;
-    t.title = tTitle.value.trim() || "Untitled";
-    t.desc = tDesc.value;
-    t.start = tStart.value || "";
-    t.end = tEnd.value || "";
-    t.assignees = selectedAssigneeKeys().map(assigneeFromKey);
-    t.color = validHex(taskColorOverride) || "";
-    t.milestones = taskMs.filter(m => m.date).map(m => ({ id: m.id || uid(), label: (m.label || "").trim(), date: m.date }));
-    if (taskRef.isNew) taskRef.board.tasks.push(t);
-    save(); closeTaskModal(); renderAll();
-  });
-  document.getElementById("tDelete").addEventListener("click", () => {
-    if (!taskRef || taskRef.isNew) return;
-    if (!confirm(`Delete task "${taskRef.task.title}"?`)) return;
-    tomb(taskRef.task.id);
-    taskRef.board.tasks = taskRef.board.tasks.filter(x => x.id !== taskRef.task.id);
-    save(); closeTaskModal(); renderAll();
-  });
 
   function renderBoard() {
     boardEl.innerHTML = "";
     const board = activeBoard();
     if (!board) return;
 
-    // Planner boards render a Gantt timeline instead of kanban columns
-    const isPlanner = board.type === "planner";
-    boardEl.classList.toggle("planner-mode", isPlanner);
-    if (isPlanner) { renderPlanner(board); return; }
+    // Same cards, two ways to draw them: columns, or a Gantt timeline
+    const isTimeline = boardView(board) === "timeline";
+    boardEl.classList.toggle("planner-mode", isTimeline);
+    if (isTimeline) { renderPlanner(board); return; }
 
     board.lists.forEach(list => boardEl.appendChild(renderList(board, list)));
 
@@ -3275,12 +3366,29 @@
       if (bc) { b.style.color = bc; b.style.borderColor = bc; }
       meta.appendChild(b);
     }
+    // Timeline span, so the board shows what the Gantt chart knows
+    if (card.start || card.end) {
+      const span = document.createElement("span");
+      span.className = "due span";
+      span.textContent = [card.start, card.end].filter(Boolean).map(shortDate).join(" → ");
+      span.title = "On the timeline: " + [card.start, card.end].filter(Boolean).join(" to ");
+      meta.appendChild(span);
+    }
     if (card.due) {
       const due = document.createElement("span");
       due.className = "due" + (isOverdue(card.due) ? " overdue" : "");
       due.textContent = card.due;
       meta.appendChild(due);
     }
+    (card.assignees || []).forEach(a => {
+      const nm = assigneeName(a);
+      if (!nm) return;
+      const d = document.createElement("span");
+      d.className = "pl-name-dot assignee-dot";
+      d.style.background = assigneeColor(a) || "var(--dim)";
+      d.title = "Assigned to " + nm;
+      meta.appendChild(d);
+    });
     if (card.desc && card.desc.trim()) {
       const d = document.createElement("span");
       d.className = "has-desc";
@@ -3322,6 +3430,14 @@
     el.addEventListener("click", () => openModal(board, list, card));
 
     return el;
+  }
+
+  // "2026-03-04" → "Mar 4" (the year only when it isn't this one)
+  function shortDate(s) {
+    const d = plParse(s);
+    if (!d) return s;
+    const y = d.getFullYear() === new Date().getFullYear() ? "" : " " + d.getFullYear();
+    return MONTHS[d.getMonth()] + " " + d.getDate() + y;
   }
 
   function isOverdue(dateStr) {
@@ -3414,28 +3530,50 @@
   let modalRef = null; // { board, list, card }
   let modalLabels = [];
 
-  function openModal(board, list, card) {
-    modalRef = { board, list, card };
+  // list is null for a new card (opened from the timeline's "+ Add Card"); it goes into
+  // whichever list is picked when it's saved.
+  function openModal(board, list, card, isNew = false) {
+    modalRef = { board, list, card, isNew };
     modalLabels = [...(card.labels || [])];
-    mTitle.value = card.title;
+    mTitle.value = card.title || "";
     mDesc.value = card.desc || "";
     mDue.value = card.due || "";
+    tStart.value = card.start || "";
+    tEnd.value = card.end || "";
+    taskMs = (card.milestones || []).map(m => ({ ...m }));
+    taskColorOverride = card.color || "";
+    buildAssigneeCheckboxes((card.assignees || []).map(keyOfAssignee));
+    syncTaskColor();
+    renderMilestoneRows();
     mContext.innerHTML = "";
-    const b = document.createElement("b"); b.textContent = list.name;
-    mContext.append(document.createTextNode("in list "), b);
+    if (list) {
+      const b = document.createElement("b"); b.textContent = list.name;
+      mContext.append(document.createTextNode("in list "), b);
+    } else {
+      mContext.append("New card");
+    }
     // Moving without dragging: the only route VoiceOver has, and faster than dragging
     // across a wide board anyway.
     mList.innerHTML = "";
-    (board.lists || []).forEach(l => {
+    (board.lists || []).forEach((l, i) => {
       const o = document.createElement("option");
       o.value = l.id;
       o.textContent = l.name;
-      o.selected = l.id === list.id;
+      o.selected = list ? l.id === list.id : i === 0;
       mList.appendChild(o);
     });
+    if (!(board.lists || []).length) {
+      const o = document.createElement("option");
+      o.value = ""; o.textContent = "To Do (new list)";
+      mList.appendChild(o);
+    }
+    document.getElementById("mDelete").style.visibility = isNew ? "hidden" : "";
     renderLabelPicker();
     overlay.classList.add("open");
     mTitle.focus();
+  }
+  function openNewCardModal(board) {
+    openModal(board, null, { id: uid(), title: "", desc: "", labels: [], due: "" }, true);
   }
 
   function renderLabelPicker() {
@@ -3459,21 +3597,41 @@
     modalRef = null;
   }
 
+  // Set a timeline field, but don't litter cards that never used the timeline with
+  // empty start/end/assignees/... keys.
+  function setCardField(card, key, value, isEmpty) {
+    if (isEmpty && !(key in card)) return;
+    card[key] = value;
+  }
+
   document.getElementById("mSave").addEventListener("click", () => {
     if (!modalRef) return;
+    const { board, list, card, isNew } = modalRef;
     const t = mTitle.value.trim();
-    if (t) modalRef.card.title = t;
-    modalRef.card.desc = mDesc.value;
-    modalRef.card.due = mDue.value;
-    modalRef.card.labels = modalLabels;
+    if (t) card.title = t;
+    else if (isNew) card.title = "Untitled";
+    card.desc = mDesc.value;
+    card.due = mDue.value;
+    card.labels = modalLabels;
+    let start = tStart.value || "", end = tEnd.value || "";
+    if (start && end && end < start) [start, end] = [end, start];
+    setCardField(card, "start", start, !start);
+    setCardField(card, "end", end, !end);
+    const assignees = selectedAssigneeKeys().map(assigneeFromKey);
+    setCardField(card, "assignees", assignees, !assignees.length);
+    const color = validHex(taskColorOverride) || "";
+    setCardField(card, "color", color, !color);
+    const ms = taskMs.filter(m => m.date).map(m => ({ id: m.id || uid(), label: (m.label || "").trim(), date: m.date }));
+    setCardField(card, "milestones", ms, !ms.length);
     // Picked a different list: move the card there, to the end. Do this after the field
     // edits so both land in one save(), i.e. one undo step and one write.
-    const toId = mList.value;
-    if (toId && toId !== modalRef.list.id) {
-      const { board, list, card } = modalRef;
-      const to = (board.lists || []).find(l => l.id === toId);
+    let to = (board.lists || []).find(l => l.id === mList.value);
+    if (isNew) {
+      if (!to) { to = { id: uid(), name: "To Do", cards: [] }; board.lists.push(to); }
+      to.cards.push(card);
+    } else if (to && to !== list) {
       const i = list.cards.findIndex(c => c.id === card.id);
-      if (to && i !== -1) {
+      if (i !== -1) {
         list.cards.splice(i, 1);
         to.cards.push(card);
       }
@@ -3482,7 +3640,7 @@
   });
   document.getElementById("mCancel").addEventListener("click", closeModal);
   document.getElementById("mDelete").addEventListener("click", () => {
-    if (!modalRef) return;
+    if (!modalRef || modalRef.isNew) return;
     // Archive (soft-delete) — recoverable from the Archive drawer
     modalRef.card.archived = true;
     save(); closeModal(); renderAll();
@@ -3540,6 +3698,7 @@
     renderPeople();
     renderDepartments();
     renderFilterBanner();
+    renderViewSeg();
     renderBoard();
     updateArchiveButton();
     updateDockBadge();
@@ -3712,8 +3871,8 @@
       // A newer file replaced our state — any open editor still points at the OLD
       // objects, so close it (and cancel a drag) before swapping to avoid a save that
       // silently writes into a detached card/task.
-      const hadEditorOpen = overlay.classList.contains("open") || taskOverlay.classList.contains("open");
-      closeModal(); closeTaskModal(); closeArchive();
+      const hadEditorOpen = overlay.classList.contains("open");
+      closeModal(); closeArchive();
       endDrag();
       readOnlyReason = schemaProblem(parsed);
       // Merge rather than replace. The arriving file is not necessarily newer in every
@@ -3729,7 +3888,7 @@
       // the other device converge on it.
       if (keptLocalEdits) save();
       if (readOnlyReason) alert(readOnlyReason);
-      else if (hadEditorOpen) alert("Sweckban merged in changes synced from another device, so the editor you had open was closed. Your own edits were kept — re-open the card or task to carry on.");
+      else if (hadEditorOpen) alert("Sweckban merged in changes synced from another device, so the editor you had open was closed. Your own edits were kept — re-open the card to carry on.");
     } catch (e) { /* ignore malformed external data */ }
   };
 
@@ -3971,9 +4130,12 @@
   window.__sweckbanMenu = (action) => {
     switch (action) {
       case "settings":       openSettings(); break;
-      case "newBoard":       { const k = document.querySelector('#boardTypeSeg .seg-btn[data-type="kanban"]'); if (k) k.click(); document.getElementById("newBoardName").focus(); break; }
-      case "newPlanner":     { const p = document.querySelector('#boardTypeSeg .seg-btn[data-type="planner"]'); if (p) p.click(); document.getElementById("newBoardName").focus(); break; }
-      case "newCard":        { const inp = boardEl.querySelector(".add-card-input"); if (inp) inp.focus(); break; }
+      case "newBoard":       { const k = document.querySelector('#boardTypeSeg .seg-btn[data-type="board"]'); if (k) k.click(); document.getElementById("newBoardName").focus(); break; }
+      case "newPlanner":     { const p = document.querySelector('#boardTypeSeg .seg-btn[data-type="timeline"]'); if (p) p.click(); document.getElementById("newBoardName").focus(); break; }
+      case "newCard":        {
+        if (boardView(activeBoard()) === "timeline") { openNewCardModal(activeBoard()); break; }
+        const inp = boardEl.querySelector(".add-card-input"); if (inp) inp.focus(); break;
+      }
       case "export":         document.getElementById("exportBtn").click(); break;
       case "import":         document.getElementById("importBtn").click(); break;
       case "archive":        if (!archiveBtn.hidden) openArchive(); break;

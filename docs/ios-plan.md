@@ -54,16 +54,24 @@ container without any further portal work.
 
 ```
 state = {
-  schema: 2,
-  activeBoard: <board id>,                 // see Phase 0 — moving out of the file
-  boards: [{ id, name, type: 'kanban'|'planner', updatedAt,
-             lists: [{ id, name, updatedAt, cards: [{ id, title, desc, labels[], due, archived, updatedAt }] }],   // kanban
-             tasks: [{ id, title, desc, start, end, assignees: [{type:'dept'|'person', id}], color, milestones: [{id,label,date}], archived, updatedAt }] }],  // planner
+  schema: 3,
+  boards: [{ id, name, defaultView?: 'timeline', updatedAt,
+             lists: [{ id, name, updatedAt,
+                       cards: [{ id, title, desc, labels[], due, archived, updatedAt,
+                                 // optional, used by the timeline view:
+                                 start, end, assignees: [{type:'dept'|'person', id}], color,
+                                 milestones: [{id,label,date}] }] }] }],
   people:      [{ id, name, handle, color, updatedAt }],
   departments: [{ id, name, handle, color, updatedAt }],
   tombstones:  { <id>: <deletedAt ms>, ... }   // hard deletes; pruned after 90 days
 }
 ```
+
+Schema 3 dropped board types. A board is always lists of cards; Board and Timeline are two
+views of the same cards (which one is showing is device-local, like the zoom). Schema-2
+files had `type: 'kanban'|'planner'` and Planner boards held `tasks[]` instead of lists;
+`unifyBoard()` turns those tasks into cards in To Do / Doing / Done. It runs on every
+`normalize()`, because a device still on an older build can merge a `tasks` array back in.
 
 Every entity has `updatedAt` (ms). `save()` in the JS diffs against the last snapshot and
 stamps only what changed (`stampChanges`); containers compare shallowly including child-id

@@ -1,6 +1,6 @@
 # Sweckban — build kit
 
-A kanban + multi-year planner, as a Mac app and an iPhone/iPad app.
+A kanban board with a multi-year timeline (Gantt) view of the same cards, as a Mac app and an iPhone/iPad app.
 
 Both are a thin native shell around **one file**, `sweckban.html`, which holds
 the entire UI. The shells own persistence and sync; the page owns everything

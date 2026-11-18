@@ -15,8 +15,8 @@ if (!block) {
   console.error("Could not find the MERGE:BEGIN/END block in sweckban.html");
   process.exit(1);
 }
-const { mergeStates, pickNewer, mergeTombstones, sameData } = new Function(
-  block[0] + "\nreturn { mergeStates, pickNewer, mergeTombstones, sameData };"
+const { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard } = new Function(
+  block[0] + "\nreturn { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard };"
 )();
 
 // ---------- tiny harness ----------
@@ -218,6 +218,97 @@ test("tie on updatedAt resolves the same way regardless of argument order", () =
   const x = { id: "c1", title: "aaa", updatedAt: 100 };
   const y = { id: "c1", title: "bbb", updatedAt: 100 };
   eq(pickNewer(x, y), pickNewer(y, x));
+});
+
+// ---------- schema 3: Planner tasks become cards ----------
+console.log("\nunify (planner tasks -> cards)");
+const clone = o => JSON.parse(JSON.stringify(o));
+const allCards = b => b.lists.flatMap(l => l.cards);
+// What the app does after every merge: normalize() runs unifyBoard on each board
+const settle = s => { s.boards.forEach(unifyBoard); return s; };
+
+test("a Planner board becomes To Do / Doing / Done with its tasks in To Do", () => {
+  const b = unifyBoard(planner("p1", "Plan", [task("t1", "one", 100), task("t2", "two", 100)], 100));
+  eq(b.lists.map(l => l.name), ["To Do", "Doing", "Done"]);
+  eq(ids(b.lists[0].cards), ["t1", "t2"]);
+  ok(!("tasks" in b) && !("type" in b), "tasks and type should be gone");
+  eq(b.defaultView, "timeline");
+  eq(b.lists[0].cards[0].start, "2026-01-01");
+  eq(b.lists[0].cards[0].labels, []);
+});
+
+test("a Kanban board is left alone apart from dropping its type", () => {
+  const before = kanban("b1", "B", [list("l1", "To Do", [card("c1", "one", 100)], 100)], 100);
+  const b = unifyBoard(clone(before));
+  eq(b.lists, before.lists);
+  ok(!("defaultView" in b), "a Kanban board should open on the board view");
+});
+
+test("legacy single assignee survives the move", () => {
+  const t = task("t1", "one", 100); delete t.assignees; t.assignee = { type: "dept", id: "d1" };
+  const b = unifyBoard(planner("p1", "Plan", [t], 100));
+  eq(b.lists[0].cards[0].assignees, [{ type: "dept", id: "d1" }]);
+  ok(!("assignee" in b.lists[0].cards[0]));
+});
+
+test("migrating twice changes nothing", () => {
+  const once = unifyBoard(planner("p1", "Plan", [task("t1", "one", 100)], 100));
+  const twice = unifyBoard(clone(once));
+  eq(twice, once);
+});
+
+test("two devices migrating the same Planner independently merge without duplicates", () => {
+  const p = () => state([planner("p1", "Plan", [task("t1", "one", 100), task("t2", "two", 100)], 100)]);
+  const mine = settle(p()), theirs = settle(p());
+  mine.boards[0].lists[0].cards[0].title = "edited here"; mine.boards[0].lists[0].cards[0].updatedAt = 300;
+  const merged = settle(mergeStates(mine, theirs));
+  eq(merged.boards[0].lists.length, 3, "lists should line up by id, not double up");
+  eq(ids(allCards(merged.boards[0])).sort(), ["t1", "t2"]);
+  eq(allCards(merged.boards[0]).find(c => c.id === "t1").title, "edited here");
+});
+
+test("an un-updated device's tasks merge into the migrated board, not beside it", () => {
+  // This device migrated and moved t1 to Done; the other device is on an old build and
+  // still writes a Planner, and has added t3 in the meantime.
+  const mine = settle(state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]));
+  const b = mine.boards[0];
+  const [t1] = b.lists[0].cards.splice(0, 1);
+  b.lists[2].cards.push(t1);
+  b.lists[0].updatedAt = b.lists[2].updatedAt = 200;
+  const theirs = state([planner("p1", "Plan", [task("t1", "one", 100), task("t3", "new on old build", 250)], 250)]);
+  const merged = settle(mergeStates(mine, theirs));
+  const m = merged.boards[0];
+  eq(ids(m.lists[2].cards), ["t1"], "the move to Done must stick");
+  eq(ids(m.lists[0].cards), ["t3"], "the new task arrives in the first column");
+  ok(!("tasks" in m), "no tasks array left behind");
+});
+
+test("a newer task edit from an old build lands on the existing card", () => {
+  const mine = settle(state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]));
+  const newer = task("t1", "renamed on old build", 400); newer.end = "2026-03-01";
+  const theirs = state([planner("p1", "Plan", [newer], 400)]);
+  const merged = settle(mergeStates(mine, theirs));
+  const c = allCards(merged.boards[0]);
+  eq(c.length, 1);
+  eq(c[0].title, "renamed on old build");
+  eq(c[0].end, "2026-03-01");
+});
+
+test("an older task copy doesn't overwrite a newer card edit", () => {
+  const mine = settle(state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]));
+  const c = mine.boards[0].lists[0].cards[0]; c.title = "edited as a card"; c.updatedAt = 500;
+  const theirs = state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]);
+  const merged = settle(mergeStates(mine, theirs));
+  eq(allCards(merged.boards[0])[0].title, "edited as a card");
+});
+
+test("a card deleted after migrating isn't brought back by an old build's task", () => {
+  const mine = settle(state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]));
+  mine.boards[0].lists[0].cards = [];
+  mine.tombstones = { t1: 300 };
+  const theirs = state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]);
+  const merged = settle(mergeStates(mine, theirs));
+  eq(allCards(merged.boards[0]), []);
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed\n");
