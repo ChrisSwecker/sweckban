@@ -941,10 +941,6 @@
           <div class="board-list" id="boardList"></div>
           <div class="stack" style="margin-top:10px">
             <input type="text" id="newBoardName" placeholder="New board name" maxlength="60">
-            <div class="seg" id="boardTypeSeg" role="radiogroup" aria-label="Opens in">
-              <button class="seg-btn on" data-type="board" role="radio" aria-checked="true">Board</button>
-              <button class="seg-btn" data-type="timeline" role="radio" aria-checked="false">Timeline</button>
-            </div>
             <button class="btn" id="addBoardBtn">+ Add Board</button>
           </div>
         </div>
@@ -2355,32 +2351,15 @@
     });
   }
 
-  // Which view a new board opens in
-  let newBoardType = "board";
-  const boardTypeSeg = document.getElementById("boardTypeSeg");
-  boardTypeSeg.querySelectorAll(".seg-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      newBoardType = btn.dataset.type;
-      boardTypeSeg.querySelectorAll(".seg-btn").forEach(b => {
-        const on = b === btn;
-        b.classList.toggle("on", on);
-        b.setAttribute("aria-checked", String(on));
-      });
-    });
-  });
-  document.getElementById("addBoardBtn").addEventListener("click", () => addBoard(newBoardType));
-  document.getElementById("newBoardName").addEventListener("keydown", e => { if (e.key === "Enter") addBoard(newBoardType); });
+  // A new board opens on the board view; the header toggle switches it to the timeline
+  document.getElementById("addBoardBtn").addEventListener("click", addBoard);
+  document.getElementById("newBoardName").addEventListener("keydown", e => { if (e.key === "Enter") addBoard(); });
 
-  function addBoard(type) {
+  function addBoard() {
     const input = document.getElementById("newBoardName");
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
     const b = { id: uid(), name, lists: [] };
-    if (type === "timeline") {
-      // The timeline has no columns to add cards to, so give it the usual three
-      b.defaultView = "timeline";
-      b.lists = ["To Do", "Doing", "Done"].map(n => ({ id: uid(), name: n, cards: [] }));
-    }
     state.boards.push(b);
     setActiveBoard(b.id);
     input.value = "";
@@ -4130,8 +4109,10 @@
   window.__sweckbanMenu = (action) => {
     switch (action) {
       case "settings":       openSettings(); break;
-      case "newBoard":       { const k = document.querySelector('#boardTypeSeg .seg-btn[data-type="board"]'); if (k) k.click(); document.getElementById("newBoardName").focus(); break; }
-      case "newPlanner":     { const p = document.querySelector('#boardTypeSeg .seg-btn[data-type="timeline"]'); if (p) p.click(); document.getElementById("newBoardName").focus(); break; }
+      // "newPlanner" is still sent by the shells' old "New Planner" menu item; there is only
+      // one kind of board now, so it does the same as New Board.
+      case "newBoard":
+      case "newPlanner":     document.getElementById("newBoardName").focus(); break;
       case "newCard":        {
         if (boardView(activeBoard()) === "timeline") { openNewCardModal(activeBoard()); break; }
         const inp = boardEl.querySelector(".add-card-input"); if (inp) inp.focus(); break;
