@@ -54,13 +54,16 @@ container without any further portal work.
 
 ```
 state = {
-  schema: 3,
+  schema: 4,
   boards: [{ id, name, defaultView?: 'timeline', updatedAt,
              lists: [{ id, name, updatedAt,
-                       cards: [{ id, title, desc, labels[], due, archived, updatedAt,
+                       cards: [{ id, title, desc, due, archived, updatedAt,
+                                 categories?: [categoryId],                 // replaces labels[]
+                                 repeat?: 'monthly'|'quarterly'|'yearly',
                                  // optional, used by the timeline view:
                                  start, end, assignees: [{type:'dept'|'person', id}], color,
                                  milestones: [{id,label,date}] }] }] }],
+  categories:  [{ id, name, color, updatedAt }],
   people:      [{ id, name, handle, color, updatedAt }],
   departments: [{ id, name, handle, color, updatedAt }],
   tombstones:  { <id>: <deletedAt ms>, ... }   // hard deletes; pruned after 90 days
@@ -72,6 +75,13 @@ views of the same cards (which one is showing is device-local, like the zoom). S
 files had `type: 'kanban'|'planner'` and Planner boards held `tasks[]` instead of lists;
 `unifyBoard()` turns those tasks into cards in To Do / Doing / Done. It runs on every
 `normalize()`, because a device still on an older build can merge a `tasks` array back in.
+
+Schema 4 replaced the unnamed colour `labels[]` with named, global `categories`.
+`labelsToCategories()` turns each label colour into a category with id `cat-<hex>` (so
+devices migrating separately agree) and runs on every `normalize()` for the same reason.
+Which categories are hidden is device-local. A card with `repeat` that moves into the Done
+column (named "Done", else the last column) hands `repeat` to a copy dated one interval
+later at the end of the first column (`nextOccurrence()`).
 
 Every entity has `updatedAt` (ms). `save()` in the JS diffs against the last snapshot and
 stamps only what changed (`stampChanges`); containers compare shallowly including child-id

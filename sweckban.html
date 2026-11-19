@@ -270,6 +270,16 @@
     box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
   }
   .tag-color-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cat-row { cursor: default; }
+  .cat-row.cat-hidden .pname, .cat-row.cat-hidden .pdot { opacity: 0.4; }
+  .cat-row .pname { cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-row .pname input { width: 100%; padding: 2px 6px; font-size: 12.5px; }
+  .cat-row .cat-none { color: var(--dim); font-style: italic; cursor: default; }
+  .cat-eye {
+    background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px;
+    display: inline-flex; align-items: center; line-height: 1;
+  }
+  @media (hover: hover) { .cat-eye:hover { color: var(--ink); } }
   .cp-swatch {
     width: 22px; height: 22px; border-radius: 50%;
     border: 1px solid transparent; cursor: pointer; opacity: .85; padding: 0;
@@ -604,6 +614,11 @@
   }
   .due.overdue { color: #fff; background: #FF453A; border-color: #FF453A; }
   .due.span { border-style: dashed; }
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; }
+  .cat-chip { display: inline-flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--dim); max-width: 100%; }
+  .cat-chip .chip { width: 26px; }
+  .pl-bar.ghost, .pl-ms.ghost { opacity: 0.35; }
+  .pl-bar.ghost { cursor: pointer; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.18) 0 4px, transparent 4px 8px); }
   .assignee-dot { width: 9px; height: 9px; }
   .modal-section {
     font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
@@ -946,6 +961,23 @@
         </div>
       </div>
 
+      <div class="pane-group" id="categoriesGroup">
+        <button class="pane-label pane-toggle" id="categoriesToggle" aria-expanded="true" aria-controls="categoriesBody">
+          <svg class="disclosure" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Categories</span>
+        </button>
+        <div class="pane-body" id="categoriesBody">
+          <div class="people-list" id="categoriesList"></div>
+          <div class="stack" style="margin-top:10px">
+            <input type="text" id="newCatName" placeholder="Category (Performance reviews)" maxlength="40">
+            <div class="tag-color-row" id="newCatColors"></div>
+            <input type="text" id="newCatHex" placeholder="#RRGGBB (optional)" maxlength="7">
+            <button class="btn subtle" id="addCatBtn">+ Add Category</button>
+          </div>
+          <div class="people-hint">Click the eye to hide or show a category's cards. Click a name to rename it.</div>
+        </div>
+      </div>
+
       <div class="pane-group" id="peopleGroup">
         <button class="pane-label pane-toggle" id="peopleToggle" aria-expanded="true" aria-controls="peopleBody">
           <svg class="disclosure" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1095,27 +1127,38 @@
       <textarea id="mDesc" placeholder="Notes, links, context…"></textarea>
     </div>
     <div class="field">
-      <label>Labels</label>
-      <div class="label-picker" id="mLabels"></div>
+      <label>Categories</label>
+      <div class="assignee-list" id="mCategories"></div>
     </div>
     <div class="modal-section" role="heading" aria-level="3">Timeline</div>
     <div class="two-col">
       <div class="field"><label for="tStart">Start</label><input type="date" id="tStart"></div>
       <div class="field"><label for="tEnd">End</label><input type="date" id="tEnd"></div>
     </div>
-    <div class="field">
-      <label for="mDue">Due date</label>
-      <input type="date" id="mDue">
+    <div class="two-col">
+      <div class="field">
+        <label for="mDue">Due date</label>
+        <input type="date" id="mDue">
+      </div>
+      <div class="field">
+        <label for="mRepeat">Repeat <span class="label-hint">(next copy when done)</span></label>
+        <select id="mRepeat">
+          <option value="">Never</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
     </div>
     <div class="field">
       <label>Assignees</label>
       <div id="tAssignees" class="assignee-list"></div>
     </div>
     <div class="field">
-      <label>Bar color <span class="label-hint">(overrides assignee)</span></label>
+      <label>Bar color <span class="label-hint">(overrides category and assignee)</span></label>
       <div class="custom-row">
         <input type="color" id="tColor" class="color-swatch-input" aria-label="Timeline bar color">
-        <button class="btn subtle mini" id="tColorReset">Use assignee color</button>
+        <button class="btn subtle mini" id="tColorReset">Use category color</button>
       </div>
     </div>
     <div class="field">
@@ -1152,7 +1195,10 @@
   //      start/end/assignees/color/milestones, and the timeline draws any card with dates.
   //      An older build would see a "Planner" board as an empty Kanban one, so it must open
   //      a schema-3 file read-only rather than edit it.
-  const SCHEMA = 3;
+  //   4: named categories (state.categories, card.categories) replace the unnamed color
+  //      labels (card.labels; see labelsToCategories), and cards can repeat (card.repeat).
+  //      A schema-3 build's merge would drop state.categories, so it must open read-only.
+  const SCHEMA = 4;
   const TOMBSTONE_TTL = 90 * 24 * 60 * 60 * 1000;  // forget deletes older than this
   let readOnlyReason = "";  // non-empty ⇒ never write (newer schema / unreadable file)
 
@@ -1249,8 +1295,8 @@
         name: "First Board",
         lists: [
           { id: uid(), name: "To Do", cards: [
-            { id: uid(), title: "Drag me to another list", desc: "", labels: [LABEL_COLORS[0]], due: "" },
-            { id: uid(), title: "Click a card to edit it", desc: "Cards hold a description, labels, and a due date.", labels: [], due: "" }
+            { id: uid(), title: "Drag me to another list", desc: "", due: "" },
+            { id: uid(), title: "Click a card to edit it", desc: "Cards hold a description, categories, dates, and can repeat.", due: "" }
           ]},
           { id: uid(), name: "Doing", cards: [] },
           { id: uid(), name: "Done", cards: [] }
@@ -1293,6 +1339,7 @@
   function forEachEntity(s, fn) {
     (s.people || []).forEach(p => fn(p, p));
     (s.departments || []).forEach(d => fn(d, d));
+    (s.categories || []).forEach(c => fn(c, c));
     (s.boards || []).forEach(b => {
       fn(b, { ...b, lists: (b.lists || []).map(l => l.id), tasks: (b.tasks || []).map(t => t.id) });
       (b.lists || []).forEach(l => {
@@ -1478,6 +1525,7 @@
                         (a, b) => mergeBoard(a, b, tombs), orderFromMine),
       people: mergeById(mine.people, theirs.people, tombs, pickNewer, orderFromMine),
       departments: mergeById(mine.departments, theirs.departments, tombs, pickNewer, orderFromMine),
+      categories: mergeById(mine.categories, theirs.categories, tombs, pickNewer, orderFromMine),
       tombstones: tombs,
     };
     return out;
@@ -1538,7 +1586,7 @@
           }
           return;
         }
-        const c = Object.assign({ labels: [], due: "" }, t, { assignees });
+        const c = Object.assign({ due: "" }, t, { assignees });
         delete c.assignee;
         home.cards.push(c);
         existing.set(c.id, c);
@@ -1549,7 +1597,76 @@
     delete b.type;
     return b;
   }
+
+  // ---------- Named categories replace color labels (schema 4) ----------
+  // A card's `labels` used to be bare hex colors from a fixed palette. Now they are ids
+  // into state.categories, which have names. Every label colour in use becomes a category
+  // whose id is derived from the colour, so two devices that each migrate the same file
+  // end up with the same categories instead of two "Orange"s. Like unifyBoard this runs on
+  // every normalize(), because a device on an older build can still merge `labels` back in
+  // — they are folded into the card's categories, never instead of them.
+  const LABEL_NAMES = { "#FF4D00": "Orange", "#4DA3FF": "Blue", "#3FBF6F": "Green",
+                        "#FFC24D": "Yellow", "#B36BFF": "Purple", "#FF5C7A": "Pink" };
+  function labelsToCategories(s) {
+    if (!Array.isArray(s.categories)) s.categories = [];
+    const tombs = s.tombstones || {};
+    const byId = new Map(s.categories.map(c => [c.id, c]));
+    (s.boards || []).forEach(b => (b.lists || []).forEach(l => (l.cards || []).forEach(card => {
+      if (!("labels" in card)) return;
+      const ids = Array.isArray(card.categories) ? card.categories.slice() : [];
+      (Array.isArray(card.labels) ? card.labels : []).forEach(hex => {
+        if (typeof hex !== "string" || !/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+        const color = hex.toUpperCase();
+        const id = "cat-" + color.slice(1).toLowerCase();
+        if (!byId.has(id)) {
+          if (id in tombs) return;   // deleted on purpose: don't resurrect it from a label
+          const cat = { id, name: LABEL_NAMES[color] || ("Label " + color), color };
+          s.categories.push(cat);
+          byId.set(id, cat);
+        }
+        if (!ids.includes(id)) ids.push(id);
+      });
+      delete card.labels;
+      if (ids.length) card.categories = ids;
+      else delete card.categories;
+    })));
+    return s;
+  }
   // MERGE:END
+
+  // RECUR:BEGIN — pure date helpers for repeating cards; tests/merge.test.js loads these
+  // too, so no DOM or app state in here.
+  const REPEAT_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
+  const REPEAT_LABELS = { monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
+
+  // "2026-01-31" + 1 month → "2026-02-28". Clamps to the last day of the target month, so
+  // a review on Feb 29 comes round on Feb 28 in a non-leap year rather than in March.
+  function addMonths(dateStr, n) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || "");
+    if (!m) return dateStr;
+    const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + n;
+    const y = Math.floor(total / 12), mo = total - y * 12;
+    const last = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+    const d = Math.min(Number(m[3]), last);
+    return `${String(y).padStart(4, "0")}-${String(mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  // The card that follows `card` in its series: same content, every date moved on by one
+  // interval, a fresh id. Ids for milestones come from makeId too so they don't collide.
+  function nextOccurrence(card, makeId) {
+    const n = REPEAT_MONTHS[card.repeat];
+    if (!n) return null;
+    const next = JSON.parse(JSON.stringify(card));
+    next.id = makeId();
+    delete next.updatedAt;
+    delete next.archived;
+    ["start", "end", "due"].forEach(k => { if (next[k]) next[k] = addMonths(next[k], n); });
+    if (Array.isArray(next.milestones)) {
+      next.milestones = next.milestones.map(ms => Object.assign({}, ms, { id: makeId(), date: addMonths(ms.date, n) }));
+    }
+    return next;
+  }
+  // RECUR:END
 
   // ---------- Save file (File System Access API) ----------
   const FS_SUPPORTED = "showOpenFilePicker" in window;
@@ -1781,8 +1898,10 @@
     }
     ensureActiveBoard();
     if (!state.tombstones || typeof state.tombstones !== "object") state.tombstones = {};
-    // Before the timestamp pass below, so the lists it creates get stamped with the rest
+    // Before the timestamp pass below, so the lists and categories they create get stamped
     (state.boards || []).forEach(unifyBoard);
+    labelsToCategories(state);
+    state.categories.forEach((c, i) => { if (!validHex(c.color)) c.color = TAG_COLORS[i % TAG_COLORS.length]; });
     const now = Date.now();
     for (const id in state.tombstones) if (now - state.tombstones[id] > TOMBSTONE_TTL) delete state.tombstones[id];
     // Data from before change tracking: stamp everything with load time
@@ -1833,6 +1952,7 @@
   }
 
   function cardMatchesFilter(card) {
+    if (!categoryVisible(card)) return false;
     // Person filter (@mention or assignment) — AND-combined with the text search below
     if (filterHandles.size) {
       let hit = false;
@@ -2199,6 +2319,160 @@
   document.getElementById("addDeptSidebarBtn").addEventListener("click", addDepartmentFromSidebar);
   [deptNameInput, deptHandleInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") addDepartmentFromSidebar(); }));
 
+  // ---------- Categories (global, replace the old colour labels) ----------
+  // Which categories are switched off is view state, like the board/timeline choice: it
+  // stays on this device. NO_CATEGORY is the toggle for cards that have no category.
+  const NO_CATEGORY = "__none";
+  const HIDDEN_CATS_KEY = "sweckban.hiddenCategories";
+  let hiddenCategories = new Set();
+  try { hiddenCategories = new Set(JSON.parse(localStorage.getItem(HIDDEN_CATS_KEY) || "[]")); } catch (e) {}
+  function saveHiddenCategories() {
+    try { localStorage.setItem(HIDDEN_CATS_KEY, JSON.stringify([...hiddenCategories])); } catch (e) {}
+  }
+  function toggleCategoryHidden(id) {
+    hiddenCategories.has(id) ? hiddenCategories.delete(id) : hiddenCategories.add(id);
+    saveHiddenCategories();
+    renderAll();   // view state only — nothing to save, nothing to sync
+  }
+  const categoryById = id => (state.categories || []).find(c => c.id === id) || null;
+  // A card's categories that still exist (a deleted one may linger on a card from a merge)
+  const cardCategories = card => (card.categories || []).map(categoryById).filter(Boolean);
+  // Shown if any of its categories is switched on; uncategorized follows "No category".
+  // Ids for categories that no longer exist are ignored, so they can't hide anything.
+  function categoryVisible(card) {
+    if (!hiddenCategories.size) return true;
+    const cats = cardCategories(card);
+    if (!cats.length) return !hiddenCategories.has(NO_CATEGORY);
+    return cats.some(c => !hiddenCategories.has(c.id));
+  }
+  function hiddenCategoryCount() {
+    let n = 0;
+    hiddenCategories.forEach(id => { if (id === NO_CATEGORY || categoryById(id)) n++; });
+    return n;
+  }
+
+  const catNameInput = document.getElementById("newCatName");
+  const catColorsRow = document.getElementById("newCatColors");
+  const catHexInput = document.getElementById("newCatHex");
+  let newCatColor = null;
+  TAG_COLORS.forEach(c => {
+    const s = document.createElement("button");
+    s.type = "button"; s.className = "cp-swatch"; s.style.background = c; s.title = c;
+    s.addEventListener("click", () => {
+      newCatColor = c; catHexInput.value = "";
+      [...catColorsRow.children].forEach(x => x.classList.toggle("on", x === s));
+    });
+    catColorsRow.appendChild(s);
+  });
+  catHexInput.addEventListener("input", () => {
+    if (catHexInput.value.trim()) { newCatColor = null; [...catColorsRow.children].forEach(x => x.classList.remove("on")); }
+  });
+  function addCategoryFromSidebar() {
+    const name = catNameInput.value.trim();
+    if (!name) { catNameInput.focus(); return; }
+    if (catHexInput.value.trim() && !validHex(catHexInput.value)) { alert("Hex colors look like #FF4D00 — six hex digits."); return; }
+    const color = validHex(catHexInput.value) || newCatColor || TAG_COLORS[state.categories.length % TAG_COLORS.length];
+    state.categories.push({ id: uid(), name, color });
+    catNameInput.value = ""; catHexInput.value = ""; newCatColor = null;
+    [...catColorsRow.children].forEach(x => x.classList.remove("on"));
+    save(); renderAll();
+  }
+  document.getElementById("addCatBtn").addEventListener("click", addCategoryFromSidebar);
+  [catNameInput, catHexInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") addCategoryFromSidebar(); }));
+
+  function removeCategory(id) {
+    tomb(id);
+    state.categories = state.categories.filter(c => c.id !== id);
+    forEachCard(c => {
+      if (!Array.isArray(c.categories)) return;
+      c.categories = c.categories.filter(x => x !== id);
+      if (!c.categories.length) delete c.categories;
+    });
+    hiddenCategories.delete(id); saveHiddenCategories();
+    save(); renderAll();
+  }
+
+  function startCategoryRename(nameEl, cat) {
+    const input = document.createElement("input");
+    input.type = "text"; input.value = cat.name; input.maxLength = 40;
+    nameEl.replaceChildren(input);
+    input.focus(); input.select();
+    let done = false;
+    const commit = () => {
+      if (done) return; done = true;
+      const v = input.value.trim();
+      if (v && v !== cat.name) { cat.name = v; save(); }
+      renderAll();
+    };
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") commit();
+      if (e.key === "Escape") { done = true; renderAll(); }
+    });
+    input.addEventListener("blur", commit);
+  }
+
+  const EYE_ON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  function renderCategories() {
+    const listEl = document.getElementById("categoriesList");
+    listEl.innerHTML = "";
+    const board = activeBoard();
+    const live = board ? boardCards(board).map(x => x.card) : [];
+    const row = (cat, label, count) => {
+      const id = cat ? cat.id : NO_CATEGORY;
+      const hidden = hiddenCategories.has(id);
+      const r = document.createElement("div");
+      r.className = "person-row cat-row" + (hidden ? " cat-hidden" : "");
+
+      const dot = document.createElement(cat ? "button" : "span");
+      dot.className = "pdot";
+      if (cat) {
+        dot.type = "button";
+        dot.style.background = cat.color;
+        dot.title = "Change " + cat.name + "'s color";
+        dot.addEventListener("click", e => { e.stopPropagation(); colorPop.open(cat, dot.getBoundingClientRect()); });
+      } else {
+        dot.style.background = "transparent";
+        dot.style.boxShadow = "inset 0 0 0 1.5px var(--dim)";
+      }
+
+      const nm = document.createElement("span");
+      nm.className = "pname" + (cat ? "" : " cat-none");
+      nm.style.flex = "1"; nm.style.minWidth = "0";
+      nm.textContent = label;
+      if (cat) { nm.title = "Click to rename"; nm.addEventListener("click", () => startCategoryRename(nm, cat)); }
+
+      const right = document.createElement("span");
+      right.style.cssText = "display:flex;gap:8px;align-items:center";
+      const cnt = document.createElement("span"); cnt.className = "pcount"; cnt.textContent = count;
+      const eye = document.createElement("button");
+      eye.type = "button"; eye.className = "cat-eye";
+      eye.innerHTML = hidden ? EYE_OFF : EYE_ON;
+      eye.title = (hidden ? "Show " : "Hide ") + (cat ? cat.name : "cards with no category");
+      eye.setAttribute("aria-label", eye.title);
+      eye.setAttribute("aria-pressed", String(!hidden));
+      eye.addEventListener("click", e => { e.stopPropagation(); toggleCategoryHidden(id); });
+      right.append(cnt, eye);
+      if (cat) {
+        const del = document.createElement("button");
+        del.className = "del"; del.textContent = "×"; del.title = "Delete category";
+        del.addEventListener("click", e => {
+          e.stopPropagation();
+          if (!confirm(`Delete category "${cat.name}"? Its cards stay; they just lose this category.`)) return;
+          removeCategory(cat.id);
+        });
+        right.appendChild(del);
+      }
+      r.append(dot, nm, right);
+      listEl.appendChild(r);
+    };
+    (state.categories || []).forEach(cat => {
+      row(cat, cat.name, live.filter(c => (c.categories || []).includes(cat.id)).length);
+    });
+    row(null, "No category", live.filter(c => !cardCategories(c).length).length);
+  }
+
   function renderDepartments() {
     departmentsListEl.innerHTML = "";
     const board = activeBoard();
@@ -2246,8 +2520,19 @@
 
   function renderFilterBanner() {
     const banner = document.getElementById("filterBanner");
-    if (!filterHandles.size) { banner.hidden = true; banner.innerHTML = ""; return; }
+    const hiddenCats = hiddenCategoryCount();
+    if (!filterHandles.size && !hiddenCats) { banner.hidden = true; banner.innerHTML = ""; return; }
     banner.hidden = false; banner.innerHTML = "";
+    if (hiddenCats) {
+      banner.append(`${hiddenCats} ${hiddenCats === 1 ? "category" : "categories"} hidden `);
+      const showAll = document.createElement("button");
+      showAll.className = "btn subtle";
+      showAll.textContent = "Show All";
+      showAll.addEventListener("click", () => { hiddenCategories.clear(); saveHiddenCategories(); renderAll(); });
+      banner.append(showAll);
+      if (!filterHandles.size) return;
+      banner.append(document.createTextNode("\u2003"));
+    }
     banner.append("Showing cards that mention or are assigned to ");
     [...filterHandles].forEach((h, i) => {
       if (i) banner.append(" or ");
@@ -2570,7 +2855,7 @@
   let plannerGroup = "none";
   try {
     const g = localStorage.getItem(PLANNER_GROUP_KEY);
-    plannerGroup = g === "1" ? "assignee" : (["list", "assignee"].includes(g) ? g : "none");
+    plannerGroup = g === "1" ? "assignee" : (["list", "assignee", "category"].includes(g) ? g : "none");
   } catch (e) {}
   function setPlannerGroup(g) {
     plannerGroup = g;
@@ -2645,8 +2930,10 @@
     if (a.type === "person") { const p = personById(a.id); return p ? p.name : ""; }
     return "";
   }
+  // Explicit bar colour, else the first category's, else the first assignee's
   function taskColor(task) {
-    return validHex(task.color) || assigneeColor((task.assignees || [])[0]) || TAG_COLORS[0];
+    const cat = cardCategories(task)[0];
+    return validHex(task.color) || (cat && validHex(cat.color)) || assigneeColor((task.assignees || [])[0]) || TAG_COLORS[0];
   }
   // Every live card on the board, with the list it sits in, in board order
   function boardCards(board) {
@@ -2713,6 +3000,16 @@
     // Swimlanes on a phone would divide rows that are already as narrow as they can be,
     // and the toggle isn't reachable there, so a preference set on the Mac doesn't carry.
     if (plannerGroup === "none" || isPhone()) return [{ header: null, tasks }];
+    if (plannerGroup === "category") {
+      // A card with several categories appears under each, like multiple assignees
+      const groups = (state.categories || [])
+        .map(c => ({ header: { key: "cat:" + c.id, name: c.name, color: c.color },
+                     tasks: tasks.filter(t => cardCategories(t.card).includes(c)) }))
+        .filter(g => g.tasks.length);
+      const none = tasks.filter(t => !cardCategories(t.card).length);
+      if (none.length) groups.push({ header: { key: "cat:none", name: "No category", color: null }, tasks: none });
+      return groups;
+    }
     if (plannerGroup === "list") {
       return (board.lists || [])
         .map(l => ({ header: { key: "list:" + l.id, name: l.name, color: null }, tasks: tasks.filter(t => t.list === l) }))
@@ -2939,6 +3236,41 @@
         track.appendChild(ms);
       });
 
+      // Upcoming repeats, faded: where this card's next copies will land. Not draggable —
+      // they don't exist yet; clicking one opens the real card.
+      const step = REPEAT_MONTHS[task.repeat];
+      if (step) {
+        let occ = task;
+        for (let i = 0; i < 400; i++) {
+          occ = nextOccurrence(occ, () => "");
+          const os = plParse(occ.start), oe = plParse(occ.end), od = plParse(occ.due);
+          const first = [os, oe, od].filter(Boolean).sort((a, b) => a - b)[0];
+          if (!first || first > end) break;
+          if (os && oe && oe >= os) {
+            const g = document.createElement("div");
+            g.className = "pl-bar ghost";
+            g.style.left = xOf(os) + "px";
+            g.style.width = Math.max(4, xOf(oe) - xOf(os)) + "px";
+            g.style.background = taskColor(task);
+            g.title = `${task.title} — repeats ${REPEAT_LABELS[task.repeat].toLowerCase()} (${occ.start})`;
+            g.addEventListener("click", open);
+            track.appendChild(g);
+          }
+          if (od) {
+            const ms = document.createElement("div");
+            ms.className = "pl-ms ghost";
+            ms.style.left = xOf(od) + "px";
+            ms.title = `Due — ${occ.due} (repeat)`;
+            ms.addEventListener("click", open);
+            const diamond = document.createElement("span");
+            diamond.className = "pl-ms-diamond";
+            diamond.style.background = milestoneColor({ label: "Due" }, task);
+            ms.appendChild(diamond);
+            track.appendChild(ms);
+          }
+        }
+      }
+
       row.append(name, track);
       return row;
     }
@@ -3055,7 +3387,7 @@
       const groupSeg = document.createElement("div");
       groupSeg.className = "seg";
       groupSeg.setAttribute("aria-label", "Group rows");
-      [["none", "No groups"], ["list", "By column"], ["assignee", "By assignee"]].forEach(([val, label]) => {
+      [["none", "No groups"], ["list", "By column"], ["category", "By category"], ["assignee", "By assignee"]].forEach(([val, label]) => {
         const b = document.createElement("button");
         b.className = "seg-btn" + (plannerGroup === val ? " on" : "");
         b.textContent = label;
@@ -3240,7 +3572,7 @@
     count.className = "list-count";
     const activeCards = list.cards.filter(c => !c.archived);
     const visCount = activeCards.filter(cardMatchesFilter).length;
-    count.textContent = (filterHandles.size || searchQuery) ? `${visCount}/${activeCards.length}` : activeCards.length;
+    count.textContent = (filterHandles.size || searchQuery || hiddenCategoryCount()) ? `${visCount}/${activeCards.length}` : activeCards.length;
 
     const del = document.createElement("button");
     del.className = "list-del";
@@ -3301,7 +3633,7 @@
       if (ac.isOpen()) return; // Enter is claiming an @mention, not submitting
       const t = addInput.value.trim();
       if (!t) return;
-      list.cards.push({ id: uid(), title: t, desc: "", labels: [], due: "" });
+      list.cards.push({ id: uid(), title: t, desc: "", due: "" });
       addInput.value = "";
       save(); renderAll();
       // restore focus to the same list's add input
@@ -3327,12 +3659,21 @@
 
     const meta = document.createElement("div");
     meta.className = "card-meta";
-    (card.labels || []).forEach(c => {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.style.background = c;
-      meta.appendChild(chip);
-    });
+    // Categories as named chips; the colour bar is what the old labels looked like
+    const cats = cardCategories(card);
+    let catRow = null;
+    if (cats.length) {
+      const row = catRow = document.createElement("div");
+      row.className = "cat-chips";
+      cats.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "cat-chip";
+        const bar = document.createElement("span"); bar.className = "chip"; bar.style.background = c.color;
+        const nm = document.createElement("span"); nm.textContent = c.name;
+        chip.append(bar, nm);
+        row.appendChild(chip);
+      });
+    }
     // Badge mentions that live only in the description, so they're visible on the card
     const known = knownHandles();
     const inTitle = extractMentions(card.title, known);
@@ -3359,6 +3700,13 @@
       due.textContent = card.due;
       meta.appendChild(due);
     }
+    if (REPEAT_LABELS[card.repeat]) {
+      const rp = document.createElement("span");
+      rp.className = "due repeat";
+      rp.textContent = "↻ " + REPEAT_LABELS[card.repeat];
+      rp.title = "Repeats " + REPEAT_LABELS[card.repeat].toLowerCase() + ": moving it to Done adds the next one";
+      meta.appendChild(rp);
+    }
     (card.assignees || []).forEach(a => {
       const nm = assigneeName(a);
       if (!nm) return;
@@ -3376,7 +3724,9 @@
       meta.appendChild(d);
     }
 
-    el.append(title, meta);
+    el.append(title);
+    if (catRow) el.append(catRow);
+    el.append(meta);
 
     el.addEventListener("pointerdown", e => {
       pointerDrag(e, {
@@ -3486,7 +3836,27 @@
     const [card] = from.cards.splice(i, 1);
     if (toIndex == null || toIndex > to.cards.length) toIndex = to.cards.length;
     to.cards.splice(toIndex, 0, card);
+    if (from !== to) onCardEnteredList(board, card, to);
     save(); renderAll();
+  }
+
+  // ---------- Repeating cards ----------
+  // "Done" is the column called Done, or the last column if no column has that name.
+  function isDoneList(board, list) {
+    const lists = board.lists || [];
+    const named = lists.find(l => (l.name || "").trim().toLowerCase() === "done");
+    return list === (named || lists[lists.length - 1]);
+  }
+  // A repeating card that reaches Done hands its series on to a fresh copy, dated one
+  // interval later, at the end of the first column. `repeat` moves to the copy, so taking
+  // the finished card out of Done and back again can't start a second series. Called
+  // before the caller's save(), so the move and the copy are one undo step.
+  function onCardEnteredList(board, card, list) {
+    if (!card.repeat || !REPEAT_MONTHS[card.repeat] || !isDoneList(board, list)) return;
+    const next = nextOccurrence(card, uid);
+    if (!next) return;
+    delete card.repeat;
+    board.lists[0].cards.push(next);
   }
 
   function moveList(board, dragId, targetId) {
@@ -3503,17 +3873,16 @@
   const mTitle = document.getElementById("mTitle");
   const mDesc = document.getElementById("mDesc");
   const mDue = document.getElementById("mDue");
-  const mLabels = document.getElementById("mLabels");
+  const mCategories = document.getElementById("mCategories");
+  const mRepeat = document.getElementById("mRepeat");
   const mList = document.getElementById("mList");
   const mContext = document.getElementById("modalContext");
   let modalRef = null; // { board, list, card }
-  let modalLabels = [];
 
   // list is null for a new card (opened from the timeline's "+ Add Card"); it goes into
   // whichever list is picked when it's saved.
   function openModal(board, list, card, isNew = false) {
     modalRef = { board, list, card, isNew };
-    modalLabels = [...(card.labels || [])];
     mTitle.value = card.title || "";
     mDesc.value = card.desc || "";
     mDue.value = card.due || "";
@@ -3547,29 +3916,35 @@
       mList.appendChild(o);
     }
     document.getElementById("mDelete").style.visibility = isNew ? "hidden" : "";
-    renderLabelPicker();
+    buildCategoryCheckboxes(card.categories || []);
+    mRepeat.value = REPEAT_MONTHS[card.repeat] ? card.repeat : "";
     overlay.classList.add("open");
     mTitle.focus();
   }
   function openNewCardModal(board) {
-    openModal(board, null, { id: uid(), title: "", desc: "", labels: [], due: "" }, true);
+    openModal(board, null, { id: uid(), title: "", desc: "", due: "" }, true);
   }
 
-  function renderLabelPicker() {
-    mLabels.innerHTML = "";
-    LABEL_COLORS.forEach(c => {
-      const sw = document.createElement("button");
-      sw.type = "button";
-      sw.className = "label-swatch" + (modalLabels.includes(c) ? " on" : "");
-      sw.style.background = c;
-      sw.title = c;
-      sw.addEventListener("click", () => {
-        modalLabels = modalLabels.includes(c) ? modalLabels.filter(x => x !== c) : [...modalLabels, c];
-        renderLabelPicker();
-      });
-      mLabels.appendChild(sw);
+  // Same checklist look as Assignees. Ids for categories that were deleted are kept off the
+  // list, so saving drops them from the card.
+  function buildCategoryCheckboxes(selected) {
+    mCategories.innerHTML = "";
+    const sel = new Set(selected);
+    (state.categories || []).forEach(cat => {
+      const row = document.createElement("label"); row.className = "assignee-row";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = cat.id; cb.checked = sel.has(cat.id);
+      const dot = document.createElement("span"); dot.className = "pl-name-dot"; dot.style.background = cat.color;
+      const nm = document.createElement("span"); nm.className = "assignee-name"; nm.textContent = cat.name;
+      row.append(cb, dot, nm);
+      mCategories.appendChild(row);
     });
+    if (!(state.categories || []).length) {
+      const e = document.createElement("div"); e.className = "ms-empty";
+      e.textContent = "No categories yet. Add them in the sidebar.";
+      mCategories.appendChild(e);
+    }
   }
+  const selectedCategoryIds = () => [...mCategories.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
 
   function closeModal() {
     overlay.classList.remove("open");
@@ -3591,7 +3966,11 @@
     else if (isNew) card.title = "Untitled";
     card.desc = mDesc.value;
     card.due = mDue.value;
-    card.labels = modalLabels;
+    const cats = selectedCategoryIds();
+    setCardField(card, "categories", cats, !cats.length);
+    if (!cats.length) delete card.categories;
+    setCardField(card, "repeat", mRepeat.value, !mRepeat.value);
+    if (!mRepeat.value) delete card.repeat;
     let start = tStart.value || "", end = tEnd.value || "";
     if (start && end && end < start) [start, end] = [end, start];
     setCardField(card, "start", start, !start);
@@ -3608,11 +3987,13 @@
     if (isNew) {
       if (!to) { to = { id: uid(), name: "To Do", cards: [] }; board.lists.push(to); }
       to.cards.push(card);
+      onCardEnteredList(board, card, to);
     } else if (to && to !== list) {
       const i = list.cards.findIndex(c => c.id === card.id);
       if (i !== -1) {
         list.cards.splice(i, 1);
         to.cards.push(card);
+        onCardEnteredList(board, card, to);
       }
     }
     save(); closeModal(); renderAll();
@@ -3674,6 +4055,7 @@
   function renderAll() {
     normalize();
     renderSidebar();
+    renderCategories();
     renderPeople();
     renderDepartments();
     renderFilterBanner();
@@ -3910,6 +4292,19 @@
   try { deptsCollapsed = localStorage.getItem(DEPTS_COLLAPSED_KEY) === "1"; } catch (e) {}
   setDeptsCollapsed(deptsCollapsed);
   departmentsToggle.addEventListener("click", () => setDeptsCollapsed(!departmentsGroup.classList.contains("collapsed")));
+
+  const CATS_COLLAPSED_KEY = "sweckban.categoriesCollapsed";
+  const categoriesGroup = document.getElementById("categoriesGroup");
+  const categoriesToggle = document.getElementById("categoriesToggle");
+  function setCatsCollapsed(collapsed) {
+    categoriesGroup.classList.toggle("collapsed", collapsed);
+    categoriesToggle.setAttribute("aria-expanded", String(!collapsed));
+    try { localStorage.setItem(CATS_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) {}
+  }
+  let catsCollapsed = false;
+  try { catsCollapsed = localStorage.getItem(CATS_COLLAPSED_KEY) === "1"; } catch (e) {}
+  setCatsCollapsed(catsCollapsed);
+  categoriesToggle.addEventListener("click", () => setCatsCollapsed(!categoriesGroup.classList.contains("collapsed")));
 
   // ---------- Collapsible sidebar (whole left panel; device-local) ----------
   const SIDEBAR_COLLAPSED_KEY = "sweckban.sidebarCollapsed";

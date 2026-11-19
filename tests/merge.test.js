@@ -15,8 +15,15 @@ if (!block) {
   console.error("Could not find the MERGE:BEGIN/END block in sweckban.html");
   process.exit(1);
 }
-const { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard } = new Function(
-  block[0] + "\nreturn { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard };"
+const recur = html.match(/\/\/ RECUR:BEGIN[\s\S]*?\/\/ RECUR:END/);
+if (!recur) {
+  console.error("Could not find the RECUR:BEGIN/END block in sweckban.html");
+  process.exit(1);
+}
+const { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard, labelsToCategories,
+        addMonths, nextOccurrence } = new Function(
+  block[0] + "\n" + recur[0] +
+  "\nreturn { mergeStates, pickNewer, mergeTombstones, sameData, unifyBoard, labelsToCategories, addMonths, nextOccurrence };"
 )();
 
 // ---------- tiny harness ----------
@@ -234,7 +241,7 @@ test("a Planner board becomes To Do / Doing / Done with its tasks in To Do", () 
   ok(!("tasks" in b) && !("type" in b), "tasks and type should be gone");
   eq(b.defaultView, "timeline");
   eq(b.lists[0].cards[0].start, "2026-01-01");
-  eq(b.lists[0].cards[0].labels, []);
+  ok(!("labels" in b.lists[0].cards[0]), "labels are gone in schema 4; tasks shouldn't gain them");
 });
 
 test("a Kanban board is left alone apart from dropping its type", () => {
@@ -309,6 +316,96 @@ test("a card deleted after migrating isn't brought back by an old build's task",
   const theirs = state([planner("p1", "Plan", [task("t1", "one", 100)], 100)]);
   const merged = settle(mergeStates(mine, theirs));
   eq(allCards(merged.boards[0]), []);
+});
+
+// ---------- schema 4: named categories replace colour labels ----------
+console.log("\ncategories (labels -> categories)");
+const labelled = (id, labels, ts) => Object.assign(card(id, id, ts), { labels });
+const cardsOf = s => s.boards.flatMap(b => b.lists.flatMap(l => l.cards));
+
+test("every label on a card becomes one of its categories", () => {
+  const s = labelsToCategories(state([kanban("b1", "B", [list("l1", "L", [
+    labelled("c1", ["#FF4D00", "#4DA3FF"], 100), labelled("c2", ["#ff4d00"], 100), labelled("c3", [], 100)], 100)], 100)]));
+  eq(s.categories.map(c => [c.id, c.name, c.color]),
+     [["cat-ff4d00", "Orange", "#FF4D00"], ["cat-4da3ff", "Blue", "#4DA3FF"]]);
+  const [c1, c2, c3] = cardsOf(s);
+  eq(c1.categories, ["cat-ff4d00", "cat-4da3ff"]);
+  eq(c2.categories, ["cat-ff4d00"], "hex case shouldn't make a second category");
+  ok(!("categories" in c3), "no labels, no categories key");
+  ok(cardsOf(s).every(c => !("labels" in c)), "labels should be gone");
+});
+
+test("a colour outside the old palette still gets a category", () => {
+  const s = labelsToCategories(state([kanban("b1", "B", [list("l1", "L", [labelled("c1", ["#123456"], 100)], 100)], 100)]));
+  eq(s.categories[0].name, "Label #123456");
+});
+
+test("migrating categories twice changes nothing", () => {
+  const once = labelsToCategories(state([kanban("b1", "B", [list("l1", "L", [labelled("c1", ["#FF4D00"], 100)], 100)], 100)]));
+  eq(labelsToCategories(clone(once)), once);
+});
+
+test("two devices migrating labels independently end up with one set of categories", () => {
+  const s = () => state([kanban("b1", "B", [list("l1", "L", [labelled("c1", ["#FF4D00"], 100), labelled("c2", ["#3FBF6F"], 100)], 100)], 100)]);
+  const merged = labelsToCategories(mergeStates(labelsToCategories(s()), labelsToCategories(s())));
+  eq(merged.categories.map(c => c.id).sort(), ["cat-3fbf6f", "cat-ff4d00"]);
+});
+
+test("categories merge, and a rename on one side wins if newer", () => {
+  const mine = state([], { categories: [{ id: "k1", name: "Perf reviews", color: "#FF4D00", updatedAt: 300 }] });
+  const theirs = state([], { categories: [{ id: "k1", name: "Old name", color: "#FF4D00", updatedAt: 100 },
+                                          { id: "k2", name: "Tool changes", color: "#4DA3FF", updatedAt: 100 }] });
+  const m = mergeStates(mine, theirs);
+  eq(m.categories.map(c => c.name).sort(), ["Perf reviews", "Tool changes"]);
+});
+
+test("a deleted category isn't brought back by an old build's labels", () => {
+  const s = state([kanban("b1", "B", [list("l1", "L", [labelled("c1", ["#FF4D00", "#4DA3FF"], 100)], 100)], 100)],
+                  { tombstones: { "cat-ff4d00": 200 } });
+  labelsToCategories(s);
+  eq(s.categories.map(c => c.id), ["cat-4da3ff"]);
+  eq(cardsOf(s)[0].categories, ["cat-4da3ff"]);
+});
+
+test("labels merged back in from an old build join the card's categories", () => {
+  const c = Object.assign(card("c1", "one", 100), { categories: ["k1"], labels: ["#FF4D00"] });
+  const s = labelsToCategories(state([kanban("b1", "B", [list("l1", "L", [c], 100)], 100)],
+                                     { categories: [{ id: "k1", name: "Perf", color: "#3FBF6F" }] }));
+  eq(cardsOf(s)[0].categories, ["k1", "cat-ff4d00"]);
+  ok(!("labels" in cardsOf(s)[0]));
+});
+
+// ---------- repeating cards ----------
+console.log("\nrepeat");
+
+test("addMonths clamps to the end of the month and handles leap years", () => {
+  eq(addMonths("2026-01-31", 1), "2026-02-28");
+  eq(addMonths("2028-01-31", 1), "2028-02-29");
+  eq(addMonths("2028-02-29", 12), "2029-02-28");
+  eq(addMonths("2026-11-15", 3), "2027-02-15");
+  eq(addMonths("2026-03-31", -1), "2026-02-28");
+  eq(addMonths("", 12), "");
+});
+
+test("the next occurrence moves every date on and gets fresh ids", () => {
+  let n = 0;
+  const c = { id: "c1", title: "Review", desc: "d", categories: ["k1"], assignees: [{ type: "dept", id: "d1" }],
+              repeat: "yearly", start: "2026-03-01", end: "2026-03-14", due: "2026-03-15",
+              milestones: [{ id: "m1", label: "EOL", date: "2026-03-10" }], updatedAt: 100, archived: false };
+  const next = nextOccurrence(c, () => "id" + (++n));
+  eq([next.start, next.end, next.due, next.milestones[0].date],
+     ["2027-03-01", "2027-03-14", "2027-03-15", "2027-03-10"]);
+  eq(next.id, "id1");
+  eq(next.milestones[0].id, "id2");
+  eq([next.title, next.categories, next.repeat, next.assignees], ["Review", ["k1"], "yearly", [{ type: "dept", id: "d1" }]]);
+  ok(!("updatedAt" in next) && !("archived" in next), "a fresh card, not a copy of the old one's state");
+  eq(c.start, "2026-03-01", "the original is untouched");
+});
+
+test("quarterly and monthly step by 3 and 1 months; never repeating gives nothing", () => {
+  eq(nextOccurrence({ repeat: "quarterly", due: "2026-11-30" }, () => "x").due, "2027-02-28");
+  eq(nextOccurrence({ repeat: "monthly", due: "2026-12-05" }, () => "x").due, "2027-01-05");
+  eq(nextOccurrence({ due: "2026-12-05" }, () => "x"), null);
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed\n");
