@@ -2590,7 +2590,10 @@
         if (!confirm(`Delete board "${b.name}" and all its cards?`)) return;
         tombBoard(b);
         state.boards = state.boards.filter(x => x.id !== b.id);
-        if (state.boards.length === 0) { const t = state.tombstones; state = seed(); state.tombstones = t; }
+        // Deleting the last board gets a fresh starter board — but only the boards are
+        // replaced. Swapping in a whole seed() here used to drop people, departments and
+        // categories too, without tombstones, so they vanished locally until a merge.
+        if (state.boards.length === 0) state.boards = seed().boards;
         ensureActiveBoard();
         save(); renderAll();
       });
