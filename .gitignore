@@ -17,3 +17,6 @@ backups/
 # Xcode derived data for the iOS target
 ios/build/
 ios/**/xcuserdata/
+
+# Distributable disk images (./package.sh)
+dist/
