@@ -468,13 +468,16 @@
   /* Milestones sit in a lane above the bars so they never cover bar text */
   .pl-ms {
     position: absolute; top: 0; height: 20px; transform: translateX(-6px);
-    display: flex; align-items: center; gap: 4px; cursor: pointer; z-index: 3; white-space: nowrap;
+    display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;
+    /* Below the sticky card-name column (z-index 2), so markers scrolled past the left
+       edge slide under it instead of printing over the card names. */
+    z-index: 1;
   }
   .pl-ms-diamond {
     width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px;
     box-shadow: 0 0 0 1.5px var(--bg); flex: none;
   }
-  .pl-ms-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; color: var(--ink); }
+  .pl-ms-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
   .planner-grid .planner-empty { position: absolute; top: 56px; left: 232px; }
 
   .list {
@@ -2869,6 +2872,16 @@
   const UNSCHEDULED_OPEN_KEY = "sweckban.unscheduledOpen";
   let unscheduledOpen = false;
   try { unscheduledOpen = localStorage.getItem(UNSCHEDULED_OPEN_KEY) === "1"; } catch (e) {}
+  // Which timeline lanes (By column / By category / By assignee headers) are folded.
+  // Device-local, like the other view state; keys are the lane keys ("cat:<id>", …).
+  const COLLAPSED_LANES_KEY = "sweckban.collapsedLanes";
+  let collapsedLanes = new Set();
+  try { collapsedLanes = new Set(JSON.parse(localStorage.getItem(COLLAPSED_LANES_KEY) || "[]")); } catch (e) {}
+  function toggleLane(key) {
+    if (collapsedLanes.has(key)) collapsedLanes.delete(key); else collapsedLanes.add(key);
+    try { localStorage.setItem(COLLAPSED_LANES_KEY, JSON.stringify([...collapsedLanes])); } catch (e) {}
+    renderBoard();
+  }
   function setUnscheduledOpen(on) {
     unscheduledOpen = on;
     try { localStorage.setItem(UNSCHEDULED_OPEN_KEY, on ? "1" : "0"); } catch (e) {}
@@ -3274,11 +3287,44 @@
         }
       }
 
+      fitMilestoneLabels(track);
       row.append(name, track);
       return row;
     }
 
-    function laneRow(header, count, onClick) {
+    // Milestones close together would print their labels over each other. Markers too
+    // close to label separately form a cluster: one combined label ("A · B") goes after
+    // the cluster's last diamond. Every label gets only the room up to the next marker,
+    // cut with an ellipsis; hovering a diamond still shows its full label and date.
+    function fitMilestoneLabels(track) {
+      const marks = [...track.querySelectorAll(".pl-ms")]
+        .map(el => ({ el, x: parseFloat(el.style.left), lbl: el.querySelector(".pl-ms-label") }))
+        .sort((a, b) => a.x - b.x);
+      const MIN = 18;                                         // narrowest useful label
+      const roomAfter = i => {                                // 12px diamond + 4px gap + 6px clear of next
+        const next = marks.slice(i + 1).find(n => n.x > marks[i].x);
+        return next ? next.x - marks[i].x - 12 - 4 - 6 - 6 : Infinity;
+      };
+      let pending = [];                                       // labels waiting to join a later marker
+      marks.forEach((m, i) => {
+        if (m.lbl) pending.push(m.lbl.textContent);
+        const room = roomAfter(i);
+        if (room < MIN && i < marks.length - 1) { if (m.lbl) m.lbl.remove(); return; }
+        if (!pending.length) return;
+        let lbl = m.lbl;
+        if (!lbl) {                                           // e.g. a faded repeat marker ends the cluster
+          lbl = document.createElement("span");
+          lbl.className = "pl-ms-label";
+          m.el.appendChild(lbl);
+        }
+        lbl.textContent = pending.join(" · ");
+        if (pending.length > 1) m.el.title = pending.join(" · ");
+        if (room !== Infinity) lbl.style.maxWidth = room + "px";
+        pending = [];
+      });
+    }
+
+    function laneRow(header, count, onClick, open) {
       const lane = document.createElement("div");
       lane.className = "pl-row pl-lane";
       const lname = document.createElement("div");
@@ -3308,16 +3354,21 @@
       if (onClick) {
         lane.classList.add("pl-lane-toggle");
         lane.setAttribute("role", "button");
-        lane.setAttribute("aria-expanded", String(unscheduledOpen));
+        lane.setAttribute("aria-expanded", String(open));
         lane.addEventListener("click", onClick);
       }
       return lane;
     }
 
     // Swimlanes (grouped) or a flat list
+    // Swimlane headers fold and unfold their rows on click
     plannerGroups(board, tasks).forEach(g => {
-      if (g.header) body.appendChild(laneRow(g.header, g.tasks.length));
-      g.tasks.forEach(task => body.appendChild(renderTaskRow(task)));
+      const open = !g.header || !collapsedLanes.has(g.header.key);
+      if (g.header) {
+        body.appendChild(laneRow({ ...g.header, name: (open ? "▾ " : "▸ ") + g.header.name },
+          g.tasks.length, () => toggleLane(g.header.key), open));
+      }
+      if (open) g.tasks.forEach(task => body.appendChild(renderTaskRow(task)));
     });
 
     // Cards with no dates at all: they are still on the board, just not on the timeline
@@ -3327,7 +3378,7 @@
         { name: (unscheduledOpen ? "▾ " : "▸ ") + "No dates", color: null,
           hint: unscheduledOpen ? "Open a card and give it a start and end to put it on the timeline" : "" },
         unscheduled.length,
-        () => setUnscheduledOpen(!unscheduledOpen)));
+        () => setUnscheduledOpen(!unscheduledOpen), unscheduledOpen));
       if (unscheduledOpen) unscheduled.forEach(t => body.appendChild(renderTaskRow(t)));
     }
 
@@ -4011,6 +4062,17 @@
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && overlay.classList.contains("open")) closeModal();
+  });
+  // Enter saves and closes the card editor. In the description, Enter still starts a new
+  // line and Cmd+Enter saves; on a focused button Enter keeps pressing that button.
+  overlay.addEventListener("keydown", e => {
+    if (e.key !== "Enter" || e.isComposing || e.shiftKey || e.altKey) return;
+    const t = e.target;
+    const cmd = e.metaKey || e.ctrlKey;
+    if (t.tagName === "TEXTAREA" && !cmd) return;
+    if (t.tagName === "BUTTON" && !cmd) return;
+    e.preventDefault();
+    document.getElementById("mSave").click();
   });
 
   // ---------- Export / Import ----------
